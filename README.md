@@ -144,7 +144,8 @@ Environment variables supported by the Django launcher:
 
 - This project now runs on Django.
 - Use `gunicorn weather_dashboard.wsgi:application --bind 0.0.0.0:$PORT` for Linux-based deployments.
-- `gunicorn` is listed in `requirements.txt` and must be installed before deploy.
+- `gunicorn` and `whitenoise` are listed in `requirements.txt` and must be installed before deploy.
+- WhiteNoise is enabled in Django settings so static assets can be served reliably in production.
 - If your platform supports a Procfile, it will use the included startup command automatically.
 
 ---
