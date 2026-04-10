@@ -6,7 +6,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-weather-prediction-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",") if host.strip()]
+
+# Build ALLOWED_HOSTS from env var + auto-detect Railway domain
+_allowed = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")          # e.g. myapp.up.railway.app
+_railway_static = os.getenv("RAILWAY_STATIC_URL", "")             # alternate static domain
+if _railway_domain and _railway_domain not in _allowed:
+    _allowed.append(_railway_domain)
+if not _allowed:                                                   # fallback for local dev
+    _allowed = ["*"]
+ALLOWED_HOSTS = _allowed
+
+# CSRF must trust Railway's HTTPS origin
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{_railway_domain}" for _railway_domain in _allowed
+    if not _railway_domain.startswith("*")
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -68,7 +83,9 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        # CompressedStaticFilesStorage (not Manifest) — avoids startup crash
+        # when staticfiles/ directory doesn't exist yet on first deploy.
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
