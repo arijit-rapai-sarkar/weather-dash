@@ -48,9 +48,6 @@
     snapTempVal:   document.getElementById("snapTempVal"),
     snapHumVal:    document.getElementById("snapHumVal"),
     snapAqiVal:    document.getElementById("snapAqiVal"),
-    errorBanner:   document.getElementById("errorBanner"),
-    errorMessage:  document.getElementById("errorMessage"),
-    errorDismiss:  document.getElementById("errorDismiss"),
     updateTime:    document.getElementById("updateTime"),
     tempValue:     document.getElementById("tempValue"),
     tempBar:       document.getElementById("tempBar"),
@@ -109,16 +106,10 @@
   }
 
   function showError(msg) {
-    if (!dom.errorBanner) return;
-    if (!state.hasEverSucceeded) return;
-    if (state.consecutiveFailures < 2) return;  // tolerate single transient errors
-    setText(dom.errorMessage, msg);
-    dom.errorBanner.hidden = false;
-    setStatus("error", "Sensor Offline");
+    console.warn("[WeatherOS] fetch error:", msg);
   }
 
   function hideError() {
-    if (dom.errorBanner) dom.errorBanner.hidden = true;
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -577,7 +568,6 @@
     } catch (err) {
       state.consecutiveFailures++;
       console.error("[WeatherOS] fetchLive error:", err);
-      setStatus(state.consecutiveFailures >= 2 ? "error" : "loading", "Retrying…");
       showError(err.message || "Connection issue. Retrying…");
     } finally {
       state.isFetchingLive = false;
@@ -687,7 +677,6 @@
   // ERROR DISMISS
   // ──────────────────────────────────────────────────────────────────
   function initErrorDismiss() {
-    dom.errorDismiss?.addEventListener("click", hideError);
   }
 
   // ──────────────────────────────────────────────────────────────────
