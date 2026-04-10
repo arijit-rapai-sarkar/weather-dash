@@ -4,7 +4,7 @@ import urllib.request
 import urllib.error
 import logging
 
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET
 from django.views.decorators.cache import never_cache
 from django.shortcuts import render
@@ -103,6 +103,10 @@ def _fetch_sheet_rows():
 
 def index(request):
     return render(request, "index.html")
+
+
+def health_check(request):
+    return HttpResponse("ok", content_type="text/plain", status=200)
 
 
 @require_GET

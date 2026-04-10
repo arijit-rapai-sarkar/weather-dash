@@ -15,6 +15,8 @@ if _railway_domain and _railway_domain not in _allowed:
     _allowed.append(_railway_domain)
 if not _allowed:                                                   # fallback for local dev
     _allowed = ["*"]
+elif not DEBUG and "*" not in _allowed:
+    _allowed.append("*")
 ALLOWED_HOSTS = _allowed
 
 # CSRF must trust Railway's HTTPS origin
@@ -133,4 +135,4 @@ LOGGING = {
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = "DENY"
-    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True

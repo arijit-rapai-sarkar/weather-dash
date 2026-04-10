@@ -6,9 +6,10 @@ def main():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "weather_dashboard.settings")
 
     if len(sys.argv) == 1:
-      host = os.getenv("DJANGO_HOST", "0.0.0.0")
-      port = os.getenv("DJANGO_PORT", "8000")
-      sys.argv.extend(["runserver", f"{host}:{port}"])
+        host = os.getenv("HOST", os.getenv("DJANGO_HOST", "0.0.0.0"))
+        port = os.getenv("PORT", os.getenv("DJANGO_PORT", "8000"))
+        print(f"Starting Django development server on {host}:{port}")
+        sys.argv.extend(["runserver", f"{host}:{port}"])
 
     from django.core.management import execute_from_command_line
 
