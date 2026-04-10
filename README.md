@@ -140,6 +140,13 @@ Environment variables supported by the Django launcher:
 | DJANGO_ALLOWED_HOSTS | * | Comma-separated allowed hosts |
 | DJANGO_SECRET_KEY | django-insecure-weather-prediction-change-me | Secret key override |
 
+## Production Notes
+
+- This project now runs on Django.
+- Use `gunicorn weather_dashboard.wsgi:application --bind 0.0.0.0:$PORT` for Linux-based deployments.
+- `gunicorn` is listed in `requirements.txt` and must be installed before deploy.
+- If your platform supports a Procfile, it will use the included startup command automatically.
+
 ---
 
 ## Performance Engineering Notes
