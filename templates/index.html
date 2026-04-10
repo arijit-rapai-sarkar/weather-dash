@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Weather Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body>
+
+<button id="sidebarToggle" class="sidebar-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="sideDrawer">
+  <span class="menu-dots" aria-hidden="true">&#8942;</span>
+</button>
+
+<aside id="sideDrawer" class="side-drawer" aria-label="Sidebar options">
+  <div class="side-drawer-head">
+    <h3>Navigation</h3>
+    <button id="sidebarClose" class="side-close" aria-label="Close sidebar">&times;</button>
+  </div>
+  <nav class="side-links">
+    <a class="side-link" href="#live-data"><span class="side-link-icon" aria-hidden="true">📡</span><span>Live</span></a>
+    <a class="side-link" href="#forecasting"><span class="side-link-icon" aria-hidden="true">📈</span><span>Forecasting</span></a>
+    <a class="side-link" href="#about-us"><span class="side-link-icon" aria-hidden="true">👥</span><span>About Us</span></a>
+    <a class="side-link" href="#feedback"><span class="side-link-icon" aria-hidden="true">💬</span><span>Feedback</span></a>
+  </nav>
+</aside>
+
+<button id="sideOverlay" class="side-overlay" aria-label="Close sidebar"></button>
+
+<div id="top"></div>
+
+<header class="hero">
+  <h1>Smart Weather Command Center</h1>
+  <p>Enterprise-grade monitoring for live atmospheric metrics and short-term forecasting insights.</p>
+</header>
+
+<div class="view-switch" id="viewSwitch" role="tablist" aria-label="Data view switch">
+  <button class="switch-btn active" data-target="live-data" role="tab" aria-selected="true">Live Data</button>
+  <button class="switch-btn" data-target="forecasting" role="tab" aria-selected="false">Forecasting</button>
+</div>
+
+<div class="rain-container" id="rainEffect"></div>
+
+<section id="live-data" class="dashboard-section switch-panel">
+  <div class="section-head">
+    <h2>Live Data</h2>
+    <span class="section-chip">Real-time</span>
+  </div>
+  <p class="section-subtitle">Track current sensor values and environment conditions as they update.</p>
+
+  <div class="grid">
+
+    <div class="card snapshot-card">
+      <div class="snapshot-head">
+        <h3>Atmospheric Snapshot</h3>
+        <span id="snapshotUpdated" class="snapshot-time">Live</span>
+      </div>
+
+      <div class="snapshot-metrics" aria-label="Temperature humidity and AQI live visualization">
+        <div class="snapshot-row">
+          <div class="snapshot-label-line">
+            <span>Temperature</span>
+            <span id="tempVizValue">--</span>
+          </div>
+          <div class="snapshot-track">
+            <div id="tempVizFill" class="snapshot-fill"></div>
+          </div>
+          <div id="tempVizState" class="snapshot-state">--</div>
+        </div>
+
+        <div class="snapshot-row">
+          <div class="snapshot-label-line">
+            <span>Humidity</span>
+            <span id="humVizValue">--</span>
+          </div>
+          <div class="snapshot-track">
+            <div id="humVizFill" class="snapshot-fill"></div>
+          </div>
+          <div id="humVizState" class="snapshot-state">--</div>
+        </div>
+
+        <div class="snapshot-row">
+          <div class="snapshot-label-line">
+            <span>AQI</span>
+            <span id="aqiVizValue">--</span>
+          </div>
+          <div class="snapshot-track">
+            <div id="aqiVizFill" class="snapshot-fill"></div>
+          </div>
+          <div id="aqiVizState" class="snapshot-state">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card temp-card" id="tempCard">
+      <h3>🌡 Temp</h3>
+      <div class="gauge-shell">
+        <canvas id="tChart"></canvas>
+        <div id="temp" class="value gauge-value"></div>
+      </div>
+      <div id="tempMood" class="metric-badge temp-badge">😎 Moderate</div>
+    </div>
+
+    <div class="card humidity-card" id="humCard">
+      <h3>💧 Humidity</h3>
+      <div class="gauge-shell humidity-shell">
+        <canvas id="hChart"></canvas>
+        <div class="humidity-gauge-center">
+          <span id="humValueIcon" class="humidity-value-icon" aria-hidden="true">💧</span>
+          <div id="hum" class="value humidity-value"></div>
+        </div>
+      </div>
+      <div class="humidity-track" aria-label="Humidity level">
+        <div id="humBar" class="humidity-fill"></div>
+      </div>
+      <div id="humBars" class="humidity-bars" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="humidity-scale"><span>Dry</span><span>Comfort</span><span>Humid</span></div>
+      <div id="humLabel" class="metric-badge humidity-badge">💧 Comfort</div>
+    </div>
+
+    <div class="card">
+      <h3>🌫 AQI</h3>
+      <div id="aqi" class="aqi-circle"></div>
+    </div>
+
+    <div class="card">
+      <h3>🌗 Day/Night</h3>
+      <img id="sunImg" width="80">
+      <div id="sunText" class="value"></div>
+    </div>
+
+    <div class="card">
+      <h3>🌧 Rain</h3>
+      <img id="rainImg" width="80">
+      <div id="rainText" class="value"></div>
+    </div>
+
+  </div>
+</section>
+
+<section id="forecasting" class="dashboard-section switch-panel is-hidden">
+  <div class="section-head">
+    <h2>Forecasting</h2>
+    <span class="section-chip forecast">Predictive</span>
+  </div>
+  <p class="section-subtitle">Projected indicators generated from current trends and weather behavior models.</p>
+
+  <div class="grid">
+
+    <div class="card">
+      <h3>🌧 Rain Chance</h3>
+      <div class="gauge-shell">
+        <canvas id="rainChance"></canvas>
+        <div id="rainChanceVal" class="value gauge-value"></div>
+      </div>
+    </div>
+
+    <div class="card temp-card" id="tempPredCard">
+      <h3>🌡 Temp Prediction</h3>
+      <div class="gauge-shell">
+        <canvas id="tempPred"></canvas>
+        <div id="tempPredVal" class="value gauge-value"></div>
+      </div>
+      <div id="tempPredMood" class="metric-badge temp-badge">😎 Moderate</div>
+    </div>
+
+    <div class="card humidity-card" id="humPredCard">
+      <h3>💧 Humidity Prediction</h3>
+      <div class="gauge-shell humidity-shell">
+        <canvas id="humPred"></canvas>
+        <div class="humidity-gauge-center">
+          <span id="humPredValueIcon" class="humidity-value-icon" aria-hidden="true">💧</span>
+          <div id="humPredVal" class="value humidity-value"></div>
+        </div>
+      </div>
+      <div class="humidity-track forecast" aria-label="Predicted humidity level">
+        <div id="humPredBar" class="humidity-fill"></div>
+      </div>
+      <div id="humPredBars" class="humidity-bars" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="humidity-scale"><span>Dry</span><span>Comfort</span><span>Humid</span></div>
+      <div id="humPredLabel" class="metric-badge humidity-badge">💧 Comfort</div>
+    </div>
+
+    <div class="card">
+      <h3>💨 Wind Speed</h3>
+      <div class="gauge-shell">
+        <canvas id="windPred"></canvas>
+        <div id="windPredVal" class="value gauge-value"></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="about-us" class="dashboard-section">
+  <div class="section-head">
+    <h2>About Us</h2>
+    <span class="section-chip">Team</span>
+  </div>
+  <p class="section-subtitle">Meet the team behind the local weather prediction platform.</p>
+
+  <div class="team-grid">
+    <article class="card team-card">
+      <img class="team-avatar" src="{{ url_for('static', filename='image/arpan-das.jpeg') }}" alt="Arpan Das">
+      <h3>Arpan Das</h3>
+      <p class="team-role">Developed the IoT Device</p>
+    </article>
+
+    <article class="card team-card">
+      <img class="team-avatar" src="{{ url_for('static', filename='image/surajit-sutradhar.jpeg') }}" alt="Surajit Sutradhar">
+      <h3>Surajit Sutradhar</h3>
+      <p class="team-role">Backend + AI Model</p>
+    </article>
+
+    <article class="card team-card">
+      <img class="team-avatar" src="{{ url_for('static', filename='image/arijit-kumar-sarkar.jpeg') }}" alt="Arijit Kumar Sarkar">
+      <h3>Arijit Kumar Sarkar</h3>
+      <p class="team-role">Frontend + Data Handling</p>
+    </article>
+
+    <article class="card team-card">
+      <img class="team-avatar" src="{{ url_for('static', filename='image/arindam-roy.jpeg') }}" alt="Arindam Roy">
+      <h3>Arindam Roy</h3>
+      <p class="team-role">Research + Tester</p>
+    </article>
+
+    <article class="card team-card">
+      <img class="team-avatar" src="{{ url_for('static', filename='image/jeet-bera.jpeg') }}" alt="Jeet Bera">
+      <h3>Jeet Bera</h3>
+      <p class="team-role">Research + Tester</p>
+    </article>
+  </div>
+</section>
+
+<section id="feedback" class="dashboard-section">
+  <div class="section-head">
+    <h2>Feedback</h2>
+    <span class="section-chip forecast">Support</span>
+  </div>
+  <p class="section-subtitle">Share your ideas and experience to improve live reports and forecasting quality.</p>
+
+  <div class="info-grid">
+    <div class="card info-card feedback-card">
+      <h3>Send Feedback</h3>
+      <form class="feedback-form" action="https://api.web3forms.com/submit" method="POST">
+        <input type="hidden" name="access_key" value="25034f9e-923b-42ba-8a6d-2d96a5a969db">
+
+        <label for="fbName">Name</label>
+        <input id="fbName" name="name" type="text" placeholder="Your name" required>
+
+        <label for="fbEmail">Email</label>
+        <input id="fbEmail" name="email" type="email" placeholder="Your email" required>
+
+        <label for="fbMessage">Message</label>
+        <textarea id="fbMessage" name="message" rows="4" placeholder="What should we improve?" required></textarea>
+
+        <button type="submit">Submit</button>
+      </form>
+    </div>
+
+    <div class="card info-card">
+      <h3>Get In Touch</h3>
+      <p>Email: <a class="contact-link" href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=arijitkumarsarkar906@gmail.com" target="_blank" rel="noopener noreferrer">arijitkumarsarkar906@gmail.com</a></p>
+      <p>Phone: 9775773392</p>
+      <p>Address: Barasat,Kolkata </p>
+    </div>
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
