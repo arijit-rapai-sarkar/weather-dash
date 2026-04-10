@@ -1,1052 +1,724 @@
-const url = "https://docs.google.com/spreadsheets/d/1m2V6q2xVZ0e2UP-XETuEZC9om58S21KiGZoWwpUi59Q/gviz/tq?tqx=out:json";
+/**
+ * WeatherOS — Enterprise Dashboard Script v2.1
+ *
+ * Uses pure SVG for all charts (no canvas sizing issues).
+ * All data fetched from /api/live and /api/history (Django backend).
+ */
+"use strict";
 
-const DAY_SKY_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Day cloudy icon">
-    <circle cx="36" cy="36" r="20" fill="#fcd34d"/>
-    <g stroke="#fbbf24" stroke-width="4" stroke-linecap="round">
-      <line x1="36" y1="8" x2="36" y2="0"/>
-      <line x1="36" y1="72" x2="36" y2="80"/>
-      <line x1="8" y1="36" x2="0" y2="36"/>
-      <line x1="72" y1="36" x2="80" y2="36"/>
-      <line x1="15" y1="15" x2="9" y2="9"/>
-      <line x1="57" y1="57" x2="63" y2="63"/>
-      <line x1="57" y1="15" x2="63" y2="9"/>
-      <line x1="15" y1="57" x2="9" y2="63"/>
-    </g>
-    <g>
-      <ellipse cx="64" cy="75" rx="30" ry="17" fill="#f8fafc"/>
-      <ellipse cx="85" cy="77" rx="20" ry="13" fill="#ffffff"/>
-      <ellipse cx="45" cy="79" rx="18" ry="12" fill="#eef2ff"/>
-    </g>
-  </svg>`
-)}`;
+(function WeatherOS() {
 
-const NIGHT_SKY_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Night cloudy icon">
-    <circle cx="84" cy="32" r="15" fill="#fde68a"/>
-    <circle cx="90" cy="28" r="15" fill="#0f172a"/>
-    <g fill="#f8fafc">
-      <polygon points="22,20 24,26 30,28 24,30 22,36 20,30 14,28 20,26"/>
-      <polygon points="50,18 51,22 55,23 51,24 50,28 49,24 45,23 49,22"/>
-      <polygon points="99,52 100,56 104,57 100,58 99,62 98,58 94,57 98,56"/>
-    </g>
-    <g>
-      <ellipse cx="60" cy="75" rx="30" ry="17" fill="#334155"/>
-      <ellipse cx="82" cy="78" rx="20" ry="13" fill="#475569"/>
-      <ellipse cx="42" cy="80" rx="18" ry="12" fill="#1e293b"/>
-    </g>
-  </svg>`
-)}`;
+  // ─── CONFIG ────────────────────────────────────────────────────────
+  const CFG = {
+    LIVE_ENDPOINT:    "/api/live/",
+    HISTORY_ENDPOINT: "/api/history/?limit=20",
+    REFRESH_MS:       10_000,
+    HISTORY_MS:       60_000,
+    RAIN_DROPS_FULL:  60,
+    RAIN_DROPS_LITE:  22,
+  };
 
-const RAIN_WEATHER_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Rain icon">
-    <g>
-      <ellipse cx="60" cy="46" rx="30" ry="17" fill="#e2e8f0"/>
-      <ellipse cx="80" cy="49" rx="20" ry="13" fill="#f8fafc"/>
-      <ellipse cx="42" cy="51" rx="18" ry="12" fill="#cbd5e1"/>
-    </g>
-    <g fill="#38bdf8">
-      <path d="M42 70c4 6 4 12 0 16-4-4-4-10 0-16z"/>
-      <path d="M60 72c4 6 4 12 0 16-4-4-4-10 0-16z"/>
-      <path d="M78 70c4 6 4 12 0 16-4-4-4-10 0-16z"/>
-    </g>
-  </svg>`
-)}`;
+  // ─── STATE ─────────────────────────────────────────────────────────
+  const state = {
+    latest:             null,
+    historyRows:        [],
+    isFetchingLive:     false,
+    isFetchingHistory:  false,
+    rainActive:         false,
+    weatherMode:        "",
+    hasEverSucceeded:   false,
+    consecutiveFailures: 0,    // only show error after 2+ failures
+    historyChart:       null,
+  };
 
-const CLEAR_WEATHER_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Clear weather icon">
-    <circle cx="60" cy="60" r="21" fill="#facc15"/>
-    <g stroke="#f59e0b" stroke-width="5" stroke-linecap="round">
-      <line x1="60" y1="14" x2="60" y2="0"/>
-      <line x1="60" y1="120" x2="60" y2="106"/>
-      <line x1="14" y1="60" x2="0" y2="60"/>
-      <line x1="120" y1="60" x2="106" y2="60"/>
-      <line x1="26" y1="26" x2="16" y2="16"/>
-      <line x1="104" y1="104" x2="94" y2="94"/>
-      <line x1="26" y1="94" x2="16" y2="104"/>
-      <line x1="104" y1="16" x2="94" y2="26"/>
-    </g>
-  </svg>`
-)}`;
+  // ─── PERFORMANCE DETECTION ─────────────────────────────────────────
+  const reducedMotion  = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const lowCpu         = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 2;
+  const lowMemory      = typeof navigator.deviceMemory === "number" && navigator.deviceMemory <= 2;
+  const saveData       = navigator.connection?.saveData === true;
+  const LITE_MODE      = reducedMotion || lowCpu || lowMemory || saveData;
+  const RAIN_DROPS     = LITE_MODE ? CFG.RAIN_DROPS_LITE : CFG.RAIN_DROPS_FULL;
 
-const dom = {
-  temp: document.getElementById("temp"),
-  tempMood: document.getElementById("tempMood"),
-  tempCard: document.getElementById("tempCard"),
-  hum: document.getElementById("hum"),
-  humBar: document.getElementById("humBar"),
-  humBars: document.getElementById("humBars"),
-  humValueIcon: document.getElementById("humValueIcon"),
-  humLabel: document.getElementById("humLabel"),
-  humEmoji: document.getElementById("humEmoji"),
-  humCard: document.getElementById("humCard"),
-  aqi: document.getElementById("aqi"),
-  sunImg: document.getElementById("sunImg"),
-  sunText: document.getElementById("sunText"),
-  rainImg: document.getElementById("rainImg"),
-  rainText: document.getElementById("rainText"),
-  snapshotUpdated: document.getElementById("snapshotUpdated"),
-  tempVizFill: document.getElementById("tempVizFill"),
-  tempVizValue: document.getElementById("tempVizValue"),
-  tempVizState: document.getElementById("tempVizState"),
-  humVizFill: document.getElementById("humVizFill"),
-  humVizValue: document.getElementById("humVizValue"),
-  humVizState: document.getElementById("humVizState"),
-  aqiVizFill: document.getElementById("aqiVizFill"),
-  aqiVizValue: document.getElementById("aqiVizValue"),
-  aqiVizState: document.getElementById("aqiVizState"),
-  rainEffect: document.getElementById("rainEffect"),
-  rainChanceVal: document.getElementById("rainChanceVal"),
-  tempPredVal: document.getElementById("tempPredVal"),
-  tempPredMood: document.getElementById("tempPredMood"),
-  tempPredCard: document.getElementById("tempPredCard"),
-  humPredVal: document.getElementById("humPredVal"),
-  humPredBar: document.getElementById("humPredBar"),
-  humPredBars: document.getElementById("humPredBars"),
-  humPredValueIcon: document.getElementById("humPredValueIcon"),
-  humPredLabel: document.getElementById("humPredLabel"),
-  humPredCard: document.getElementById("humPredCard"),
-  windPredVal: document.getElementById("windPredVal"),
-  tChart: document.getElementById("tChart"),
-  hChart: document.getElementById("hChart"),
-  rainChance: document.getElementById("rainChance"),
-  tempPred: document.getElementById("tempPred"),
-  humPred: document.getElementById("humPred"),
-  windPred: document.getElementById("windPred")
-};
+  // ─── DOM CACHE ─────────────────────────────────────────────────────
+  const dom = {
+    topbar:        document.getElementById("topbar"),
+    statusDot:     document.getElementById("statusDot"),
+    statusLabel:   document.getElementById("statusLabel"),
+    eyebrowDot:    document.getElementById("eyebrowDot"),
+    snapTempVal:   document.getElementById("snapTempVal"),
+    snapHumVal:    document.getElementById("snapHumVal"),
+    snapAqiVal:    document.getElementById("snapAqiVal"),
+    errorBanner:   document.getElementById("errorBanner"),
+    errorMessage:  document.getElementById("errorMessage"),
+    errorDismiss:  document.getElementById("errorDismiss"),
+    updateTime:    document.getElementById("updateTime"),
+    tempValue:     document.getElementById("tempValue"),
+    tempBar:       document.getElementById("tempBar"),
+    tempBadge:     document.getElementById("tempBadge"),
+    cardTemp:      document.getElementById("card-temp"),
+    humValue:      document.getElementById("humValue"),
+    humBar:        document.getElementById("humBar"),
+    humBadge:      document.getElementById("humBadge"),
+    aqiValue:      document.getElementById("aqiValue"),
+    aqiBar:        document.getElementById("aqiBar"),
+    aqiBadge:      document.getElementById("aqiBadge"),
+    dayNightIcon:  document.getElementById("dayNightIcon"),
+    dayNightLabel: document.getElementById("dayNightLabel"),
+    rainIcon:      document.getElementById("rainIcon"),
+    rainLabel:     document.getElementById("rainLabel"),
+    rainLayer:     document.getElementById("rainLayer"),
+    rainChanceVal: document.getElementById("rainChanceVal"),
+    tempPredVal:   document.getElementById("tempPredVal"),
+    tempPredBadge: document.getElementById("tempPredBadge"),
+    humPredVal:    document.getElementById("humPredVal"),
+    humPredBadge:  document.getElementById("humPredBadge"),
+    windVal:       document.getElementById("windVal"),
+    cHistory:      document.getElementById("historyChart"),
+    hamburger:     document.getElementById("hamburger"),
+    mobileMenu:    document.getElementById("mobileMenu"),
+    mobileClose:   document.getElementById("mobileClose"),
+    menuBackdrop:  document.getElementById("menuBackdrop"),
+    navLinks:      document.querySelectorAll(".topbar-link"),
+    mobileLinks:   document.querySelectorAll(".mobile-link"),
+    feedbackForm:  document.getElementById("feedbackForm"),
+    formSuccess:   document.getElementById("formSuccess"),
+    fbSubmit:      document.getElementById("fbSubmit"),
+  };
 
-const charts = {
-  tChart: null,
-  hChart: null,
-  rainChart: null,
-  tempChart2: null,
-  humChart2: null,
-  windChart: null
-};
+  // ──────────────────────────────────────────────────────────────────
+  // UTILITIES
+  // ──────────────────────────────────────────────────────────────────
+  function clamp(v, min, max)  { return Math.min(Math.max(v, min), max); }
+  function round(v, d = 0)     { return +v.toFixed(d); }
+  function fmt1(v)             { return round(v, 1); }
+  function setText(el, txt)    { if (el && el.textContent !== String(txt)) el.textContent = txt; }
+  function setAttr(el, k, v)   { if (el) el.setAttribute(k, v); }
 
-let rainActive = false;
-let isFetching = false;
-let uiFrameQueued = false;
-let pendingState = null;
-let weatherMode = "";
-const canTilt = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-const isMobileDevice = window.matchMedia("(hover: none), (pointer: coarse)").matches;
-
-function detectPerformanceMode() {
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const lowCpu = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 2;
-  const lowMemory = typeof navigator.deviceMemory === "number" && navigator.deviceMemory > 0 && navigator.deviceMemory <= 2;
-  const saveData = typeof navigator.connection === "object" && navigator.connection?.saveData === true;
-
-  return prefersReducedMotion || lowCpu || lowMemory || saveData;
-}
-
-const perfLite = detectPerformanceMode();
-const mobileLite = isMobileDevice || perfLite;
-const UPDATE_INTERVAL_MS = mobileLite ? 15000 : 5000;
-
-async function loadChartLibraryIfNeeded() {
-  if (mobileLite) {
-    return false;
+  function animateValue(el) {
+    if (!el || LITE_MODE) return;
+    el.classList.remove("val-anim");
+    requestAnimationFrame(() => el.classList.add("val-anim"));
   }
 
-  if (typeof Chart !== "undefined") {
-    return true;
+  // ──────────────────────────────────────────────────────────────────
+  // STATUS
+  // ──────────────────────────────────────────────────────────────────
+  function setStatus(type, label) {
+    if (dom.statusDot)  dom.statusDot.className  = `status-dot ${type}`;
+    if (dom.statusLabel) setText(dom.statusLabel, label);
   }
 
-  return new Promise((resolve) => {
-    const existing = document.querySelector('script[data-chartjs-loader="true"]');
-    if (existing) {
-      existing.addEventListener("load", () => resolve(true), { once: true });
-      existing.addEventListener("error", () => resolve(false), { once: true });
-      return;
+  function showError(msg) {
+    if (!dom.errorBanner) return;
+    if (!state.hasEverSucceeded) return;
+    if (state.consecutiveFailures < 2) return;  // tolerate single transient errors
+    setText(dom.errorMessage, msg);
+    dom.errorBanner.hidden = false;
+    setStatus("error", "Sensor Offline");
+  }
+
+  function hideError() {
+    if (dom.errorBanner) dom.errorBanner.hidden = true;
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // PROFILES
+  // ──────────────────────────────────────────────────────────────────
+  function getTempProfile(t) {
+    if (t >= 36) return { label: "🔥 Hot",       cls: "card-hot",      color: "#fb7185" };
+    if (t >= 28) return { label: "☀️ Warm",      cls: "card-warm",     color: "#fbbf24" };
+    if (t >= 20) return { label: "😊 Moderate",  cls: "card-moderate", color: "#38bdf8" };
+    return             { label: "🧊 Cool",       cls: "card-cool",     color: "#93c5fd" };
+  }
+
+  function getHumProfile(h) {
+    if (h < 35)  return { label: "🏜 Dry",          color: "#fb923c" };
+    if (h <= 65) return { label: "🌿 Comfortable",  color: "#34d399" };
+    return              { label: "🌫 Humid",         color: "#38bdf8" };
+  }
+
+  function getAqiProfile(a) {
+    if (a <= 50)  return { label: "✅ Good",            color: "#34d399" };
+    if (a <= 100) return { label: "⚠️ Moderate",       color: "#fbbf24" };
+    if (a <= 200) return { label: "🚫 Unhealthy",      color: "#f87171" };
+    return               { label: "☠️ Very Unhealthy", color: "#a78bfa" };
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // WEATHER MODE
+  // ──────────────────────────────────────────────────────────────────
+  function applyWeatherMode(dayNight, rain) {
+    let mode = "cloudy";
+    if (rain === "Raining")      mode = "rainy";
+    else if (dayNight === "Bright") mode = "sunny";
+    else if (dayNight === "Dark")   mode = "night";
+    if (mode !== state.weatherMode) {
+      state.weatherMode = mode;
+      document.body.dataset.weather = mode;
     }
-
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/chart.js";
-    script.async = true;
-    script.dataset.chartjsLoader = "true";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-}
-
-function initLiquidGlass() {
-  if (mobileLite || !canTilt) {
-    return;
   }
 
-  const glassElements = document.querySelectorAll(".top-nav, .dashboard-section, .card, .side-drawer");
-
-  glassElements.forEach((element) => {
-    const isCard = element.classList.contains("card");
-    let rafId = 0;
-    let pendingEvent = null;
-
-    element.style.setProperty("--pointer-x", "50%");
-    element.style.setProperty("--pointer-y", "50%");
-    if (isCard) {
-      element.style.setProperty("--tilt-x", "0deg");
-      element.style.setProperty("--tilt-y", "0deg");
+  // ──────────────────────────────────────────────────────────────────
+  // RAIN DROPS
+  // ──────────────────────────────────────────────────────────────────
+  function syncRain(isRaining) {
+    if (!dom.rainLayer || isRaining === state.rainActive) return;
+    state.rainActive = isRaining;
+    if (isRaining && !LITE_MODE) {
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < RAIN_DROPS; i++) {
+        const d = document.createElement("div");
+        d.className = "raindrop";
+        d.style.left             = `${Math.random() * 100}%`;
+        d.style.height           = `${10 + Math.random() * 14}px`;
+        d.style.animationDuration  = `${0.6 + Math.random() * 0.7}s`;
+        d.style.animationDelay     = `${-Math.random() * 2}s`;
+        frag.appendChild(d);
+      }
+      dom.rainLayer.appendChild(frag);
+      dom.rainLayer.classList.add("active");
+    } else {
+      dom.rainLayer.classList.remove("active");
+      setTimeout(() => { dom.rainLayer.innerHTML = ""; }, 650);
     }
+  }
 
-    const paintPointer = () => {
-      if (!pendingEvent) {
-        rafId = 0;
-        return;
-      }
-
-      const rect = element.getBoundingClientRect();
-      const x = ((pendingEvent.clientX - rect.left) / rect.width) * 100;
-      const y = ((pendingEvent.clientY - rect.top) / rect.height) * 100;
-
-      element.style.setProperty("--pointer-x", `${x}%`);
-      element.style.setProperty("--pointer-y", `${y}%`);
-
-      if (isCard && canTilt) {
-        const tiltX = ((50 - y) / 50) * 4;
-        const tiltY = ((x - 50) / 50) * 4;
-        element.style.setProperty("--tilt-x", `${tiltX.toFixed(2)}deg`);
-        element.style.setProperty("--tilt-y", `${tiltY.toFixed(2)}deg`);
-      }
-
-      pendingEvent = null;
-      rafId = 0;
+  // ──────────────────────────────────────────────────────────────────
+  // FORECAST COMPUTATION
+  // ──────────────────────────────────────────────────────────────────
+  function computeForecast(temp, hum, rain) {
+    const baseRainChance = rain === "Raining" ? 82 : clamp(38 + hum * 0.5, 5, 92);
+    return {
+      rainChance: round(baseRainChance),
+      tempPred:   round(temp + (Math.random() * 1.6 - 0.8), 1),
+      humPred:    round(clamp(hum + (Math.random() * 6 - 3), 0, 100), 1),
+      wind:       round(Math.random() * 28, 1),
     };
-
-    element.addEventListener(
-      "pointermove",
-      (event) => {
-        pendingEvent = event;
-        if (!rafId) {
-          rafId = requestAnimationFrame(paintPointer);
-        }
-      },
-      { passive: true }
-    );
-
-    element.addEventListener("pointerleave", () => {
-      pendingEvent = null;
-      element.style.setProperty("--pointer-x", "50%");
-      element.style.setProperty("--pointer-y", "50%");
-      if (isCard) {
-        element.style.setProperty("--tilt-x", "0deg");
-        element.style.setProperty("--tilt-y", "0deg");
-      }
-    });
-  });
-}
-
-function initCursorZoom() {
-  if (!canTilt) {
-    return;
   }
 
-  const zoomTargets = document.querySelectorAll(".hero h1, .section-head h2, .switch-btn, .side-link, .feedback-form button");
+  // ──────────────────────────────────────────────────────────────────
+  // SVG DONUT GAUGE  (no canvas, no sizing issues)
+  // ──────────────────────────────────────────────────────────────────
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const GAUGE_R = 52;    // radius
+  const GAUGE_CX = 64;   // centre x
+  const GAUGE_CY = 64;   // centre y
+  const GAUGE_STROKE = 12;
+  const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_R;
+  const GAUGE_GAP_DEG = 70;   // gap at bottom
+  const GAUGE_ARC_FRAC = (360 - GAUGE_GAP_DEG) / 360;   // fraction of circle used
 
-  zoomTargets.forEach((element) => {
-    const isHeading = element.matches(".hero h1");
-    let rafId = 0;
-    let pendingEvent = null;
+  /**
+   * Create an SVG donut gauge inside containerId.
+   * Returns { svgEl, arcEl, labelEl } for updates.
+   */
+  function createDonut(containerId, color) {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
 
-    element.style.setProperty("--cursor-x", "50%");
-    element.style.setProperty("--cursor-y", "50%");
-    if (isHeading) {
-      element.style.setProperty("--heading-tilt-x", "0deg");
-      element.style.setProperty("--heading-tilt-y", "0deg");
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 128 128");
+    svg.setAttribute("width",   "128");
+    svg.setAttribute("height",  "128");
+    svg.style.display = "block";
+    svg.style.margin  = "0 auto";
+
+    // Rotation so the gap is at the bottom centre
+    const rotate = `rotate(${90 + GAUGE_GAP_DEG / 2} ${GAUGE_CX} ${GAUGE_CY})`;
+
+    // Track arc (background)
+    const track = document.createElementNS(SVG_NS, "circle");
+    track.setAttribute("cx", GAUGE_CX);
+    track.setAttribute("cy", GAUGE_CY);
+    track.setAttribute("r",  GAUGE_R);
+    track.setAttribute("fill", "none");
+    track.setAttribute("stroke", "rgba(255,255,255,0.07)");
+    track.setAttribute("stroke-width", GAUGE_STROKE);
+    track.setAttribute("stroke-linecap", "round");
+    track.setAttribute("stroke-dasharray", `${GAUGE_CIRCUMFERENCE * GAUGE_ARC_FRAC} ${GAUGE_CIRCUMFERENCE}`);
+    track.setAttribute("transform", rotate);
+    svg.appendChild(track);
+
+    // Value arc (foreground)
+    const arc = document.createElementNS(SVG_NS, "circle");
+    arc.setAttribute("cx", GAUGE_CX);
+    arc.setAttribute("cy", GAUGE_CY);
+    arc.setAttribute("r",  GAUGE_R);
+    arc.setAttribute("fill", "none");
+    arc.setAttribute("stroke", color);
+    arc.setAttribute("stroke-width", GAUGE_STROKE);
+    arc.setAttribute("stroke-linecap", "round");
+    arc.setAttribute("stroke-dasharray", `0 ${GAUGE_CIRCUMFERENCE}`);
+    arc.setAttribute("transform", rotate);
+    if (!LITE_MODE) {
+      arc.style.transition = "stroke-dasharray 0.6s cubic-bezier(0.4,0,0.2,1)";
     }
+    svg.appendChild(arc);
 
-    const paintPointer = () => {
-      if (!pendingEvent) {
-        rafId = 0;
-        return;
-      }
+    container.insertBefore(svg, container.firstChild);
 
-      const rect = element.getBoundingClientRect();
-      const x = ((pendingEvent.clientX - rect.left) / rect.width) * 100;
-      const y = ((pendingEvent.clientY - rect.top) / rect.height) * 100;
-
-      element.style.setProperty("--cursor-x", `${x}%`);
-      element.style.setProperty("--cursor-y", `${y}%`);
-
-      if (isHeading) {
-        const tiltX = ((50 - y) / 50) * 3;
-        const tiltY = ((x - 50) / 50) * 5;
-        element.style.setProperty("--heading-tilt-x", `${tiltX.toFixed(2)}deg`);
-        element.style.setProperty("--heading-tilt-y", `${tiltY.toFixed(2)}deg`);
-      }
-
-      pendingEvent = null;
-      rafId = 0;
-    };
-
-    element.addEventListener(
-      "pointermove",
-      (event) => {
-        pendingEvent = event;
-        if (!rafId) {
-          rafId = requestAnimationFrame(paintPointer);
-        }
-      },
-      { passive: true }
-    );
-
-    element.addEventListener("pointerleave", () => {
-      pendingEvent = null;
-      element.style.setProperty("--cursor-x", "50%");
-      element.style.setProperty("--cursor-y", "50%");
-      if (isHeading) {
-        element.style.setProperty("--heading-tilt-x", "0deg");
-        element.style.setProperty("--heading-tilt-y", "0deg");
-      }
-    });
-  });
-}
-
-function initSidebar() {
-  const toggle = document.getElementById("sidebarToggle");
-  const closeBtn = document.getElementById("sidebarClose");
-  const overlay = document.getElementById("sideOverlay");
-  const links = document.querySelectorAll(".side-link");
-  const topLinks = document.querySelectorAll(".nav-split-link");
-
-  if (!toggle || !closeBtn || !overlay) {
-    return;
+    return { svgEl: svg, arcEl: arc };
   }
 
-  const setActiveLinkByHash = (hash) => {
-    if (!hash) {
+  function setDonut(handle, value, maxVal) {
+    if (!handle) return;
+    const fraction = clamp(value / maxVal, 0, 1);
+    const len = fraction * GAUGE_CIRCUMFERENCE * GAUGE_ARC_FRAC;
+    const gap = GAUGE_CIRCUMFERENCE - len;
+    handle.arcEl.setAttribute("stroke-dasharray", `${len.toFixed(2)} ${gap.toFixed(2)}`);
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // SVG SPARKLINE
+  // ──────────────────────────────────────────────────────────────────
+  function createSparklineSVG(containerId, color) {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 200 40");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.width  = "100%";
+    svg.style.height = "40px";
+    svg.style.display = "block";
+    svg.style.marginTop = "8px";
+
+    // Gradient fill
+    const defs = document.createElementNS(SVG_NS, "defs");
+    const gradId = `sg-${containerId}`;
+    const grad = document.createElementNS(SVG_NS, "linearGradient");
+    grad.setAttribute("id", gradId);
+    grad.setAttribute("x1", "0"); grad.setAttribute("y1", "0");
+    grad.setAttribute("x2", "0"); grad.setAttribute("y2", "1");
+    const stop1 = document.createElementNS(SVG_NS, "stop");
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", color);
+    stop1.setAttribute("stop-opacity", "0.3");
+    const stop2 = document.createElementNS(SVG_NS, "stop");
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("stop-color", color);
+    stop2.setAttribute("stop-opacity", "0");
+    grad.appendChild(stop1);
+    grad.appendChild(stop2);
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    const area = document.createElementNS(SVG_NS, "path");
+    area.setAttribute("fill", `url(#${gradId})`);
+    svg.appendChild(area);
+
+    const line = document.createElementNS(SVG_NS, "polyline");
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", color);
+    line.setAttribute("stroke-width", "1.5");
+    line.setAttribute("stroke-linejoin", "round");
+    line.setAttribute("stroke-linecap", "round");
+    svg.appendChild(line);
+
+    container.appendChild(svg);
+    return { svgEl: svg, lineEl: line, areaEl: area };
+  }
+
+  function updateSparklineSVG(handle, values) {
+    if (!handle || !values || values.length < 2) return;
+    const n   = values.length;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+    const W = 200, H = 40, pad = 2;
+    const toX = i => ((i / (n - 1)) * (W - pad * 2) + pad).toFixed(1);
+    const toY = v => (H - pad - ((v - min) / range) * (H - pad * 2)).toFixed(1);
+
+    const pts = values.map((v, i) => `${toX(i)},${toY(v)}`).join(" ");
+    handle.lineEl.setAttribute("points", pts);
+
+    // closed path for area fill
+    const areaPath = `M ${toX(0)},${H - pad} ` +
+      values.map((v, i) => `L ${toX(i)},${toY(v)}`).join(" ") +
+      ` L ${toX(n - 1)},${H - pad} Z`;
+    handle.areaEl.setAttribute("d", areaPath);
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // HISTORY CHART  (Chart.js — needs explicit parent height)
+  // ──────────────────────────────────────────────────────────────────
+  function initHistoryChart() {
+    if (!dom.cHistory) return;
+    if (state.historyChart) return;
+    if (typeof Chart === "undefined") {
+      console.warn("[WeatherOS] Chart.js not available for history chart");
       return;
     }
 
-    links.forEach((link) => {
-      link.classList.toggle("active", link.getAttribute("href") === hash);
+    Chart.defaults.color = "#4a5880";
+    Chart.defaults.font  = { family: "'Inter', sans-serif", size: 11 };
+
+    state.historyChart = new Chart(dom.cHistory, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Temperature (°C)",
+            data: [],
+            borderColor: "#38bdf8",
+            backgroundColor: "rgba(56,189,248,0.08)",
+            borderWidth: 2,
+            pointRadius: 2.5,
+            pointBackgroundColor: "#38bdf8",
+            tension: 0.4,
+            fill: true,
+          },
+          {
+            label: "Humidity (%)",
+            data: [],
+            borderColor: "#34d399",
+            backgroundColor: "rgba(52,211,153,0.06)",
+            borderWidth: 2,
+            pointRadius: 2.5,
+            pointBackgroundColor: "#34d399",
+            tension: 0.4,
+            fill: true,
+          },
+          {
+            label: "AQI",
+            data: [],
+            borderColor: "#f472b6",
+            backgroundColor: "rgba(244,114,182,0.06)",
+            borderWidth: 2,
+            pointRadius: 2.5,
+            pointBackgroundColor: "#f472b6",
+            tension: 0.4,
+            fill: true,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        animation: LITE_MODE ? false : { duration: 500 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(13,16,32,0.92)",
+            borderColor: "rgba(255,255,255,0.1)",
+            borderWidth: 1,
+            titleColor: "#f0f4ff",
+            bodyColor: "#8896b3",
+            padding: 12,
+            cornerRadius: 8,
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: { color: "#4a5880", maxTicksLimit: 8, font: { size: 10 } },
+          },
+          y: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: { color: "#4a5880", font: { size: 10 } },
+          },
+        },
+      },
     });
+  }
 
-    topLinks.forEach((link) => {
-      link.classList.toggle("active", link.getAttribute("href") === hash);
+  function updateHistoryChart(rows) {
+    if (!state.historyChart) return;
+    const labels = rows.map(r => {
+      const ts = r.timestamp;
+      if (!ts) return "";
+      const d = new Date(ts);
+      return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     });
-  };
+    state.historyChart.data.labels           = labels;
+    state.historyChart.data.datasets[0].data = rows.map(r => r.temperature);
+    state.historyChart.data.datasets[1].data = rows.map(r => r.humidity);
+    state.historyChart.data.datasets[2].data = rows.map(r => r.aqi);
+    state.historyChart.update(LITE_MODE ? "none" : "active");
+  }
 
-  const openDrawer = () => {
-    document.body.classList.add("drawer-open");
-    toggle.setAttribute("aria-expanded", "true");
-  };
-
-  const closeDrawer = () => {
-    document.body.classList.remove("drawer-open");
-    toggle.setAttribute("aria-expanded", "false");
-  };
-
-  const toggleDrawer = () => {
-    if (document.body.classList.contains("drawer-open")) {
-      closeDrawer();
-      return;
-    }
-    openDrawer();
-  };
-
-  toggle.addEventListener("click", toggleDrawer);
-  closeBtn.addEventListener("click", closeDrawer);
-  overlay.addEventListener("click", closeDrawer);
-
-  links.forEach((link) => {
-    link.addEventListener("click", () => {
-      setActiveLinkByHash(link.getAttribute("href"));
-      closeDrawer();
-    });
-  });
-
-  const sections = Array.from(document.querySelectorAll("section[id]"));
-  const sectionObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-        setActiveLinkByHash(`#${entry.target.id}`);
-      });
+  // ──────────────────────────────────────────────────────────────────
+  // INIT SVG WIDGETS (called once after DOM is ready)
+  // ──────────────────────────────────────────────────────────────────
+  const svgWidgets = {
+    donuts: {
+      rainChance: null,
+      tempPred:   null,
+      humPred:    null,
+      wind:       null,
     },
-    {
-      threshold: 0.52,
-      rootMargin: "-10% 0px -35% 0px"
-    }
-  );
-
-  sections.forEach((section) => sectionObserver.observe(section));
-
-  setActiveLinkByHash(window.location.hash || "#live-data");
-
-  window.addEventListener("hashchange", () => {
-    setActiveLinkByHash(window.location.hash || "#live-data");
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeDrawer();
-    }
-  });
-}
-
-function syncSwitchWithHash(hash) {
-  const livePanel = document.getElementById("live-data");
-  const forecastPanel = document.getElementById("forecasting");
-  const switchButtons = document.querySelectorAll(".switch-btn");
-
-  if (!livePanel || !forecastPanel || !switchButtons.length) {
-    return;
-  }
-
-  const target = hash === "#forecasting" ? "forecasting" : "live-data";
-  livePanel.classList.toggle("is-hidden", target !== "live-data");
-  forecastPanel.classList.toggle("is-hidden", target !== "forecasting");
-
-  switchButtons.forEach((button) => {
-    const isActive = button.dataset.target === target;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-selected", isActive ? "true" : "false");
-  });
-}
-
-function initViewSwitch() {
-  const switchButtons = document.querySelectorAll(".switch-btn");
-  if (!switchButtons.length) {
-    return;
-  }
-
-  const applyFromHash = () => {
-    const currentHash = window.location.hash || "#live-data";
-    syncSwitchWithHash(currentHash);
+    sparklines: {
+      temp: null,
+      hum:  null,
+      aqi:  null,
+    },
   };
 
-  switchButtons.forEach((button) => {
-    button.addEventListener("click", (e) => {
+  function initSvgWidgets() {
+    svgWidgets.donuts.rainChance = createDonut("donut-rain-chance", "#818cf8");
+    svgWidgets.donuts.tempPred   = createDonut("donut-temp-pred",   "#38bdf8");
+    svgWidgets.donuts.humPred    = createDonut("donut-hum-pred",    "#34d399");
+    svgWidgets.donuts.wind       = createDonut("donut-wind",        "#fbbf24");
+
+    svgWidgets.sparklines.temp   = createSparklineSVG("sparkline-temp", "#38bdf8");
+    svgWidgets.sparklines.hum    = createSparklineSVG("sparkline-hum",  "#34d399");
+    svgWidgets.sparklines.aqi    = createSparklineSVG("sparkline-aqi",  "#f472b6");
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // RENDER LIVE DATA
+  // ──────────────────────────────────────────────────────────────────
+  function renderLive(reading) {
+    const { temperature: temp, humidity: hum, aqi, day_night: dn, rain } = reading;
+
+    applyWeatherMode(dn, rain);
+    syncRain(rain === "Raining");
+
+    setText(dom.updateTime, new Date().toLocaleTimeString([], {
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    }));
+
+    // ── Hero snapshot ──
+    const prevTemp = dom.snapTempVal?.textContent;
+    setText(dom.snapTempVal, `${fmt1(temp)}°C`);
+    setText(dom.snapHumVal,  `${round(hum)}%`);
+    setText(dom.snapAqiVal,  `${round(aqi)}`);
+    if (prevTemp !== dom.snapTempVal?.textContent) {
+      animateValue(dom.snapTempVal);
+      animateValue(dom.snapHumVal);
+      animateValue(dom.snapAqiVal);
+    }
+
+    // ── Temp card ──
+    const tProfile = getTempProfile(temp);
+    setText(dom.tempValue, fmt1(temp));
+    setText(dom.tempBadge, tProfile.label);
+    if (dom.tempBar) dom.tempBar.style.width = `${clamp((temp / 50) * 100, 0, 100)}%`;
+    animateValue(dom.tempValue);
+    if (dom.cardTemp) {
+      dom.cardTemp.classList.remove("card-hot", "card-warm", "card-moderate", "card-cool");
+      dom.cardTemp.classList.add(tProfile.cls);
+    }
+
+    // ── Humidity card ──
+    const hProfile = getHumProfile(hum);
+    setText(dom.humValue, round(hum));
+    setText(dom.humBadge, hProfile.label);
+    if (dom.humBar) dom.humBar.style.width = `${clamp(hum, 0, 100)}%`;
+    animateValue(dom.humValue);
+
+    // ── AQI card ──
+    const aProfile = getAqiProfile(aqi);
+    setText(dom.aqiValue, round(aqi));
+    setText(dom.aqiBadge, aProfile.label);
+    if (dom.aqiBar) {
+      dom.aqiBar.style.width      = `${clamp((aqi / 300) * 100, 0, 100)}%`;
+      dom.aqiBar.style.background = `linear-gradient(90deg, ${aProfile.color}88, ${aProfile.color})`;
+    }
+    animateValue(dom.aqiValue);
+
+    // ── Day/Night ──
+    if (dom.dayNightIcon) dom.dayNightIcon.textContent  = dn === "Bright" ? "☀️" : "🌙";
+    if (dom.dayNightLabel) dom.dayNightLabel.textContent = dn === "Bright" ? "Daytime" : "Night";
+
+    // ── Rain ──
+    if (dom.rainIcon)  dom.rainIcon.textContent  = rain === "Raining" ? "🌧" : "☀️";
+    if (dom.rainLabel) dom.rainLabel.textContent = rain === "Raining" ? "Raining" : "Clear";
+
+    // ── Forecast ──
+    const f = computeForecast(temp, hum, rain);
+    setText(dom.rainChanceVal, `${f.rainChance}%`);
+    setText(dom.tempPredVal,   `${fmt1(f.tempPred)}`);
+    setText(dom.tempPredBadge, getTempProfile(f.tempPred).label);
+    setText(dom.humPredVal,    `${round(f.humPred)}`);
+    setText(dom.humPredBadge,  getHumProfile(f.humPred).label);
+    setText(dom.windVal,       `${f.wind}`);
+
+    // ── SVG Donuts ──
+    setDonut(svgWidgets.donuts.rainChance, f.rainChance, 100);
+    setDonut(svgWidgets.donuts.tempPred,   f.tempPred,   50);
+    setDonut(svgWidgets.donuts.humPred,    f.humPred,    100);
+    setDonut(svgWidgets.donuts.wind,       f.wind,       50);
+
+    // ── Accumulated sparkline data ──
+    state.historyRows.push(reading);
+    if (state.historyRows.length > 20) state.historyRows.shift();
+    updateSparklineSVG(svgWidgets.sparklines.temp, state.historyRows.map(r => r.temperature));
+    updateSparklineSVG(svgWidgets.sparklines.hum,  state.historyRows.map(r => r.humidity));
+    updateSparklineSVG(svgWidgets.sparklines.aqi,  state.historyRows.map(r => r.aqi));
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // DATA FETCHING
+  // ──────────────────────────────────────────────────────────────────
+  async function fetchLive() {
+    if (state.isFetchingLive || document.visibilityState === "hidden") return;
+    state.isFetchingLive = true;
+    setStatus("loading", "Fetching…");
+
+    try {
+      const res  = await fetch(CFG.LIVE_ENDPOINT, { cache: "no-store" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      if (!json.data) throw new Error("Empty data from server.");
+
+      state.latest = json.data;
+      state.hasEverSucceeded = true;
+      state.consecutiveFailures = 0;
+      hideError();
+      setStatus("online", "Live · Connected");
+      renderLive(json.data);
+
+    } catch (err) {
+      state.consecutiveFailures++;
+      console.error("[WeatherOS] fetchLive error:", err);
+      setStatus(state.consecutiveFailures >= 2 ? "error" : "loading", "Retrying…");
+      showError(err.message || "Connection issue. Retrying…");
+    } finally {
+      state.isFetchingLive = false;
+    }
+  }
+
+  async function fetchHistory() {
+    if (state.isFetchingHistory) return;
+    state.isFetchingHistory = true;
+    try {
+      const res  = await fetch(CFG.HISTORY_ENDPOINT, { cache: "no-store" });
+      if (!res.ok) { console.warn("[WeatherOS] history HTTP", res.status); return; }
+      const json = await res.json();
+      if (!Array.isArray(json.data) || !json.data.length) return;
+      updateHistoryChart(json.data);
+      // Also warm up sparklines with real history data
+      updateSparklineSVG(svgWidgets.sparklines.temp, json.data.map(r => r.temperature));
+      updateSparklineSVG(svgWidgets.sparklines.hum,  json.data.map(r => r.humidity));
+      updateSparklineSVG(svgWidgets.sparklines.aqi,  json.data.map(r => r.aqi));
+    } catch (err) {
+      console.warn("[WeatherOS] fetchHistory error:", err);
+    } finally {
+      state.isFetchingHistory = false;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // NAVIGATION
+  // ──────────────────────────────────────────────────────────────────
+  function setActiveNav(section) {
+    dom.navLinks.forEach(a  => a.classList.toggle("active", a.dataset.section === section));
+    dom.mobileLinks.forEach(a => a.classList.toggle("active", a.dataset.section === section));
+  }
+
+  function initNav() {
+    [...dom.navLinks, ...dom.mobileLinks].forEach(link => {
+      link.addEventListener("click", () => {
+        const s = link.dataset.section;
+        if (s) setActiveNav(s);
+        closeMobileMenu();
+      });
+    });
+
+    const sections = document.querySelectorAll("section[id]");
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) setActiveNav(e.target.id); }),
+      { threshold: 0.4, rootMargin: "-10% 0px -40% 0px" }
+    );
+    sections.forEach(s => io.observe(s));
+
+    window.addEventListener("scroll", () => {
+      dom.topbar?.classList.toggle("scrolled", window.scrollY > 20);
+    }, { passive: true });
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // MOBILE MENU
+  // ──────────────────────────────────────────────────────────────────
+  function openMobileMenu() {
+    dom.mobileMenu?.classList.add("open");
+    dom.menuBackdrop?.classList.add("visible");
+    dom.hamburger?.classList.add("open");
+    setAttr(dom.hamburger, "aria-expanded", "true");
+  }
+  function closeMobileMenu() {
+    dom.mobileMenu?.classList.remove("open");
+    dom.menuBackdrop?.classList.remove("visible");
+    dom.hamburger?.classList.remove("open");
+    setAttr(dom.hamburger, "aria-expanded", "false");
+  }
+  function initMobileMenu() {
+    dom.hamburger?.addEventListener("click", () =>
+      dom.mobileMenu?.classList.contains("open") ? closeMobileMenu() : openMobileMenu()
+    );
+    dom.mobileClose?.addEventListener("click", closeMobileMenu);
+    dom.menuBackdrop?.addEventListener("click", closeMobileMenu);
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeMobileMenu(); });
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // FEEDBACK FORM
+  // ──────────────────────────────────────────────────────────────────
+  function initFeedbackForm() {
+    const form = dom.feedbackForm;
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const target = button.dataset.target;
-      if (!target) {
-        return;
-      }
-
-      const nextHash = `#${target}`;
-      if (history.pushState) {
-        history.pushState(null, null, nextHash);
-        syncSwitchWithHash(nextHash);
-      } else {
-        window.location.hash = nextHash;
+      const btn = dom.fbSubmit;
+      if (btn) { btn.disabled = true; btn.querySelector(".submit-text").textContent = "Sending…"; }
+      try {
+        const res = await fetch(form.action, { method: "POST", body: new FormData(form) });
+        if (res.ok) {
+          form.reset();
+          if (dom.formSuccess) dom.formSuccess.hidden = false;
+        } else {
+          alert("Failed to send. Please try again.");
+        }
+      } catch {
+        alert("Network error. Please check your connection.");
+      } finally {
+        if (btn) { btn.disabled = false; btn.querySelector(".submit-text").textContent = "Send Feedback"; }
       }
     });
-  });
-
-  applyFromHash();
-
-  window.addEventListener("hashchange", applyFromHash);
-}
-
-function initModernAnimations() {
-  if (mobileLite) {
-    return;
   }
 
-  const cards = document.querySelectorAll(".card");
-  if (!cards.length) {
-    return;
+  // ──────────────────────────────────────────────────────────────────
+  // ERROR DISMISS
+  // ──────────────────────────────────────────────────────────────────
+  function initErrorDismiss() {
+    dom.errorDismiss?.addEventListener("click", hideError);
   }
 
-  document.body.classList.add("js-motion");
-
-  cards.forEach((card, index) => {
-    card.style.setProperty("--card-delay", `${Math.min(index * 55, 420)}ms`);
-  });
-
-  const observer = new IntersectionObserver(
-    (entries, obs) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-        entry.target.classList.add("in-view");
-        obs.unobserve(entry.target);
-      });
-    },
-    {
-      threshold: 0.18,
-      rootMargin: "0px 0px -8% 0px"
-    }
-  );
-
-  cards.forEach((card) => observer.observe(card));
-}
-
-async function getData() {
-  const res = await fetch(url, { cache: "no-store" });
-  const txt = await res.text();
-  const json = JSON.parse(txt.substring(47, txt.length - 2));
-  return json.table.rows || [];
-}
-
-function gauge(ctx, val, max, color) {
-  if (typeof Chart === "undefined" || !ctx) {
-    return null;
-  }
-
-  return new Chart(ctx, {
-    type: "doughnut",
-    data: {
-      datasets: [
-        {
-          data: [val, max - val],
-          backgroundColor: [color, "#222"],
-          borderWidth: 0
-        }
-      ]
-    },
-    options: {
-      animation: false,
-      cutout: "70%",
-      plugins: { legend: { display: false } }
-    }
-  });
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function toNumber(value, fallback = 0) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  if (typeof value === "string") {
-    const cleaned = value.replace(/[^0-9.+-]/g, "");
-    const n = Number(cleaned);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function updateTextDiff(el, text) {
-  if (!el) {
-    return false;
-  }
-
-  const next = String(text);
-  if (el.textContent !== next) {
-    el.textContent = next;
-    return true;
-  }
-
-  return false;
-}
-
-function updateSrcDiff(el, src) {
-  if (!el || el.src === src) {
-    return false;
-  }
-  el.src = src;
-  return true;
-}
-
-function updateBorderDiff(el, border) {
-  if (!el || el.style.border === border) {
-    return;
-  }
-  el.style.border = border;
-}
-
-function triggerAnimationClass(el, className) {
-  if (!el) {
-    return;
-  }
-
-  el.classList.remove(className);
-  requestAnimationFrame(() => {
-    el.classList.add(className);
-  });
-}
-
-function resolveWeatherMode(state) {
-  if (state.rain === "Raining") {
-    return "rainy";
-  }
-
-  if (state.sun === "Bright") {
-    return "sunny";
-  }
-
-  if (state.sun === "Dark") {
-    return "night";
-  }
-
-  return "cloudy";
-}
-
-function applyWeatherMode(state) {
-  const nextMode = resolveWeatherMode(state);
-  if (weatherMode === nextMode) {
-    return;
-  }
-
-  weatherMode = nextMode;
-  document.body.dataset.weather = nextMode;
-}
-
-function applyAqiEffect(aqi) {
-  if (!dom.aqi) {
-    return;
-  }
-
-  dom.aqi.classList.toggle("aqi-warning", aqi >= 100 && aqi < 200);
-  dom.aqi.classList.toggle("aqi-critical", aqi >= 200);
-}
-
-function applyAqiColorScale(aqi) {
-  if (!dom.aqi) {
-    return;
-  }
-
-  const safeAqi = clamp(aqi, 0, 300);
-  const hue = 120 - (safeAqi / 300) * 120;
-  const ringColor = `hsl(${hue.toFixed(0)} 88% 52%)`;
-  const glowColor = `hsla(${hue.toFixed(0)}, 92%, 58%, 0.46)`;
-
-  dom.aqi.style.border = `3px solid ${ringColor}`;
-  dom.aqi.style.background = `radial-gradient(circle at 34% 28%, hsla(${hue.toFixed(0)}, 95%, 62%, 0.34), rgba(0, 0, 0, 0.45) 66%)`;
-  dom.aqi.style.boxShadow = `inset 0 0 20px rgba(0,0,0,0.5), 0 0 16px ${glowColor}, 0 6px 16px rgba(0,0,0,0.32)`;
-}
-
-function getTempProfile(temp) {
-  if (temp >= 34) {
-    return { emoji: "🔥", label: "Hot", className: "temp-hot" };
-  }
-
-  if (temp >= 22) {
-    return { emoji: "😎", label: "Moderate", className: "temp-moderate" };
-  }
-
-  return { emoji: "🧊", label: "Cool", className: "temp-cool" };
-}
-
-function applyTempProfile(temp, moodEl, cardEl) {
-  const profile = getTempProfile(temp);
-
-  if (updateTextDiff(moodEl, `${profile.emoji} ${profile.label}`)) {
-    triggerAnimationClass(moodEl, "value-bounce");
-  }
-
-  if (!cardEl) {
-    return;
-  }
-
-  cardEl.classList.remove("temp-hot", "temp-moderate", "temp-cool");
-  cardEl.classList.add(profile.className);
-}
-
-function getHumidityProfile(humidity) {
-  if (humidity < 35) {
-    return { emoji: "🏜", label: "Dry", className: "humidity-dry" };
-  }
-
-  if (humidity <= 65) {
-    return { emoji: "🌿", label: "Comfort", className: "humidity-comfort" };
-  }
-
-  return { emoji: "🌫", label: "Humid", className: "humidity-humid" };
-}
-
-function getAqiProfile(aqi) {
-  if (aqi <= 50) {
-    return { label: "Good", accent: "#22c55e", fill: "linear-gradient(90deg, #22c55e, #4ade80)" };
-  }
-
-  if (aqi <= 100) {
-    return { label: "Moderate", accent: "#f59e0b", fill: "linear-gradient(90deg, #f59e0b, #fbbf24)" };
-  }
-
-  if (aqi <= 200) {
-    return { label: "Unhealthy", accent: "#ef4444", fill: "linear-gradient(90deg, #ef4444, #fb7185)" };
-  }
-
-  return { label: "Very Unhealthy", accent: "#a855f7", fill: "linear-gradient(90deg, #a855f7, #c084fc)" };
-}
-
-function setSnapshotRow(fillEl, valueEl, stateEl, options) {
-  if (fillEl) {
-    fillEl.style.width = `${options.percent}%`;
-    fillEl.style.background = options.fill;
-  }
-
-  if (valueEl) {
-    valueEl.textContent = options.valueText;
-  }
-
-  if (stateEl) {
-    stateEl.textContent = options.stateText;
-    stateEl.style.borderColor = `${options.accent}80`;
-    stateEl.style.background = `${options.accent}26`;
-    stateEl.style.color = options.accent;
-  }
-}
-
-function updateSnapshotMetrics(temp, hum, aqi) {
-  const safeTemp = clamp(temp, 0, 50);
-  const safeHum = clamp(hum, 0, 100);
-  const safeAqi = clamp(aqi, 0, 300);
-
-  const tempProfile = getTempProfile(safeTemp);
-  const humProfile = getHumidityProfile(safeHum);
-  const aqiProfile = getAqiProfile(safeAqi);
-
-  setSnapshotRow(dom.tempVizFill, dom.tempVizValue, dom.tempVizState, {
-    percent: Math.round((safeTemp / 50) * 100),
-    valueText: `${Math.round(safeTemp)}°C`,
-    stateText: tempProfile.label,
-    fill: safeTemp >= 34 ? "linear-gradient(90deg, #fb7185, #ef4444)" : safeTemp >= 22 ? "linear-gradient(90deg, #facc15, #f59e0b)" : "linear-gradient(90deg, #38bdf8, #0ea5e9)",
-    accent: safeTemp >= 34 ? "#fb7185" : safeTemp >= 22 ? "#f59e0b" : "#38bdf8"
-  });
-
-  setSnapshotRow(dom.humVizFill, dom.humVizValue, dom.humVizState, {
-    percent: Math.round(safeHum),
-    valueText: `${Math.round(safeHum)}%`,
-    stateText: humProfile.label,
-    fill: safeHum < 35 ? "linear-gradient(90deg, #fb923c, #f97316)" : safeHum <= 65 ? "linear-gradient(90deg, #2dd4bf, #14b8a6)" : "linear-gradient(90deg, #38bdf8, #2563eb)",
-    accent: safeHum < 35 ? "#fb923c" : safeHum <= 65 ? "#2dd4bf" : "#38bdf8"
-  });
-
-  setSnapshotRow(dom.aqiVizFill, dom.aqiVizValue, dom.aqiVizState, {
-    percent: Math.round((safeAqi / 300) * 100),
-    valueText: `${Math.round(safeAqi)}`,
-    stateText: aqiProfile.label,
-    fill: aqiProfile.fill,
-    accent: aqiProfile.accent
-  });
-
-  if (dom.snapshotUpdated) {
-    const now = new Date();
-    dom.snapshotUpdated.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-}
-
-function updateHumidityBars(container, humidity) {
-  if (!container) {
-    return;
-  }
-
-  const bars = container.querySelectorAll("span");
-  if (!bars.length) {
-    return;
-  }
-
-  const activeCount = Math.max(1, Math.round((humidity / 100) * bars.length));
-  bars.forEach((bar, index) => {
-    bar.classList.toggle("active", index < activeCount);
-  });
-}
-
-function applyHumidityProfile(humidity, options = {}) {
-  const safeHumidity = clamp(humidity, 0, 100);
-  const hue = 35 + (safeHumidity / 100) * 165;
-  const startHue = Math.max(24, hue - 28);
-  const profile = getHumidityProfile(safeHumidity);
-
-  if (options.fillEl) {
-    options.fillEl.style.width = `${safeHumidity}%`;
-    options.fillEl.style.background = `linear-gradient(90deg, hsl(${startHue.toFixed(0)} 90% 58%), hsl(${hue.toFixed(0)} 88% 56%))`;
-  }
-
-  updateHumidityBars(options.barsEl, safeHumidity);
-
-  if (options.labelEl && updateTextDiff(options.labelEl, `${profile.emoji} ${profile.label}`)) {
-    triggerAnimationClass(options.labelEl, "value-bounce");
-  }
-
-  if (options.emojiEl && updateTextDiff(options.emojiEl, profile.emoji)) {
-    triggerAnimationClass(options.emojiEl, "icon-pop");
-  }
-
-  if (!options.cardEl) {
-    return;
-  }
-
-  options.cardEl.classList.remove("humidity-dry", "humidity-comfort", "humidity-humid");
-  options.cardEl.classList.add(profile.className);
-}
-
-function applyForecastEffects(forecastData) {
-  if (dom.windPredVal) {
-    dom.windPredVal.classList.toggle("wind-alert", forecastData.wind >= 22);
-  }
-
-  if (dom.humPredVal) {
-    dom.humPredVal.classList.toggle("humid-alert", forecastData.humPred >= 80);
-  }
-}
-
-function setRainDrops(count) {
-  if (!dom.rainEffect) {
-    return;
-  }
-
-  const currentDrops = dom.rainEffect.children.length;
-  if (currentDrops < count) {
-    const fragment = document.createDocumentFragment();
-    for (let i = currentDrops; i < count; i += 1) {
-      const drop = document.createElement("div");
-      drop.className = "drop";
-      drop.style.left = `${Math.random() * 100}%`;
-      fragment.appendChild(drop);
-    }
-    dom.rainEffect.appendChild(fragment);
-  } else if (currentDrops > count) {
-    while (dom.rainEffect.children.length > count) {
-      dom.rainEffect.removeChild(dom.rainEffect.lastChild);
-    }
-  }
-}
-
-function setRainState(isRaining) {
-  if (!dom.rainEffect || rainActive === isRaining) {
-    return;
-  }
-
-  rainActive = isRaining;
-  if (isRaining) {
-    if (mobileLite) {
-      setRainDrops(0);
-      dom.rainEffect.style.opacity = "0";
-      return;
-    }
-
-    setRainDrops(perfLite ? 18 : 60);
-    dom.rainEffect.style.opacity = "1";
-  } else {
-    dom.rainEffect.style.opacity = "0";
-    dom.rainEffect.textContent = "";
-  }
-}
-
-function forecast(temp, hum, rain) {
-  return {
-    rainChance: rain === "Raining" ? 80 : Math.min(40 + hum / 2, 90),
-    tempPred: temp + (Math.random() * 2 - 1),
-    humPred: hum + (Math.random() * 5 - 2),
-    wind: Math.random() * 30
-  };
-}
-
-function updateGauge(chart, value, max) {
-  if (!chart) {
-    return;
-  }
-
-  const safeValue = clamp(value, 0, max);
-  const next = [safeValue, max - safeValue];
-  const current = chart.data.datasets[0].data;
-
-  if (current[0] !== next[0] || current[1] !== next[1]) {
-    chart.data.datasets[0].data = next;
-    chart.update("none");
-  }
-}
-
-function ensureCharts(temp, hum, f) {
-  if (mobileLite || typeof Chart === "undefined") {
-    return;
-  }
-
-  if (!charts.tChart) {
-    charts.tChart = gauge(dom.tChart, clamp(temp, 0, 50), 50, "#ff6b6b");
-    charts.hChart = gauge(dom.hChart, clamp(hum, 0, 100), 100, "#22d3ee");
-    charts.rainChart = gauge(dom.rainChance, clamp(f.rainChance, 0, 100), 100, "#4ecdc4");
-    charts.tempChart2 = gauge(dom.tempPred, clamp(f.tempPred, 0, 50), 50, "#ff6b6b");
-    charts.humChart2 = gauge(dom.humPred, clamp(f.humPred, 0, 100), 100, "#22d3ee");
-    charts.windChart = gauge(dom.windPred, clamp(f.wind, 0, 50), 50, "#a29bfe");
-    return;
-  }
-
-  updateGauge(charts.tChart, temp, 50);
-  updateGauge(charts.hChart, hum, 100);
-  updateGauge(charts.rainChart, f.rainChance, 100);
-  updateGauge(charts.tempChart2, f.tempPred, 50);
-  updateGauge(charts.humChart2, f.humPred, 100);
-  updateGauge(charts.windChart, f.wind, 50);
-}
-
-function renderState(state) {
-  applyWeatherMode(state);
-
-  if (updateTextDiff(dom.temp, `${state.temp}°C`)) {
-    triggerAnimationClass(dom.temp, "value-bounce");
-  }
-
-  if (updateTextDiff(dom.hum, `${state.hum}%`)) {
-    triggerAnimationClass(dom.hum, "value-bounce");
-  }
-
-  if (updateTextDiff(dom.aqi, state.aqi)) {
-    triggerAnimationClass(dom.aqi, "value-bounce");
-  }
-
-  applyAqiEffect(state.aqi);
-  applyAqiColorScale(state.aqi);
-  updateSnapshotMetrics(state.temp, state.hum, state.aqi);
-
-  applyTempProfile(state.temp, dom.tempMood, dom.tempCard);
-  applyHumidityProfile(state.hum, {
-    fillEl: dom.humBar,
-    barsEl: dom.humBars,
-    labelEl: dom.humLabel,
-    emojiEl: dom.humEmoji,
-    valueIconEl: dom.humValueIcon,
-    cardEl: dom.humCard
-  });
-
-  if (state.sun === "Bright") {
-    if (updateSrcDiff(dom.sunImg, DAY_SKY_ICON)) {
-      triggerAnimationClass(dom.sunImg, "icon-pop");
-    }
-    if (updateTextDiff(dom.sunText, "Day")) {
-      triggerAnimationClass(dom.sunText, "value-bounce");
-    }
-  } else {
-    if (updateSrcDiff(dom.sunImg, NIGHT_SKY_ICON)) {
-      triggerAnimationClass(dom.sunImg, "icon-pop");
-    }
-    if (updateTextDiff(dom.sunText, "Night")) {
-      triggerAnimationClass(dom.sunText, "value-bounce");
-    }
-  }
-
-  if (state.rain === "Raining") {
-    if (updateSrcDiff(dom.rainImg, RAIN_WEATHER_ICON)) {
-      triggerAnimationClass(dom.rainImg, "icon-pop");
-    }
-    if (updateTextDiff(dom.rainText, "Raining")) {
-      triggerAnimationClass(dom.rainText, "value-bounce");
-    }
-    setRainState(true);
-  } else {
-    if (updateSrcDiff(dom.rainImg, CLEAR_WEATHER_ICON)) {
-      triggerAnimationClass(dom.rainImg, "icon-pop");
-    }
-    if (updateTextDiff(dom.rainText, "Clear")) {
-      triggerAnimationClass(dom.rainText, "value-bounce");
-    }
-    setRainState(false);
-  }
-
-  if (updateTextDiff(dom.rainChanceVal, `${Math.round(state.forecast.rainChance)}%`)) {
-    triggerAnimationClass(dom.rainChanceVal, "value-bounce");
-  }
-  if (updateTextDiff(dom.tempPredVal, `${Math.round(state.forecast.tempPred)}°C`)) {
-    triggerAnimationClass(dom.tempPredVal, "value-bounce");
-  }
-  applyTempProfile(state.forecast.tempPred, dom.tempPredMood, dom.tempPredCard);
-
-  if (updateTextDiff(dom.humPredVal, `${Math.round(state.forecast.humPred)}%`)) {
-    triggerAnimationClass(dom.humPredVal, "value-bounce");
-  }
-  applyHumidityProfile(state.forecast.humPred, {
-    fillEl: dom.humPredBar,
-    barsEl: dom.humPredBars,
-    labelEl: dom.humPredLabel,
-    valueIconEl: dom.humPredValueIcon,
-    cardEl: dom.humPredCard
-  });
-
-  if (updateTextDiff(dom.windPredVal, `${Math.round(state.forecast.wind)} km/h`)) {
-    triggerAnimationClass(dom.windPredVal, "value-bounce");
-  }
-
-  applyForecastEffects(state.forecast);
-
-  ensureCharts(state.temp, state.hum, state.forecast);
-}
-
-function scheduleRender(state) {
-  pendingState = state;
-  if (uiFrameQueued) {
-    return;
-  }
-
-  uiFrameQueued = true;
-  requestAnimationFrame(() => {
-    uiFrameQueued = false;
-    if (!pendingState) {
-      return;
-    }
-    renderState(pendingState);
-    pendingState = null;
-  });
-}
-
-async function update() {
-  if (document.visibilityState === "hidden") {
-    return;
-  }
-
-  if (isFetching) {
-    return;
-  }
-
-  isFetching = true;
-  try {
-    const rows = await getData();
-    if (!rows.length) {
-      return;
-    }
-
-    const r = rows[rows.length - 1];
-    const temp = toNumber(r.c?.[1]?.v, 0);
-    const hum = toNumber(r.c?.[2]?.v, 0);
-    const aqi = toNumber(r.c?.[3]?.v, 0);
-    const sun = r.c?.[4]?.v || "Dark";
-    const rain = r.c?.[5]?.v || "Clear";
-
-    scheduleRender({
-      temp,
-      hum,
-      aqi,
-      sun,
-      rain,
-      forecast: forecast(temp, hum, rain)
+  // ──────────────────────────────────────────────────────────────────
+  // ENTRY POINT
+  // ──────────────────────────────────────────────────────────────────
+  async function init() {
+    initNav();
+    initMobileMenu();
+    initErrorDismiss();
+    initFeedbackForm();
+
+    // Create all SVG widgets (no canvas sizing issues)
+    initSvgWidgets();
+
+    // Init history chart (needs Chart.js)
+    initHistoryChart();
+
+    // First live fetch
+    await fetchLive();
+
+    // Load historical data for history chart + warm up sparklines
+    fetchHistory();
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") fetchLive();
     });
-  } catch (error) {
-    console.error("Failed to update weather dashboard", error);
-  } finally {
-    isFetching = false;
-  }
-}
 
-async function bootstrap() {
-  if (mobileLite) {
-    document.body.classList.add("mobile-lite");
+    setInterval(fetchLive,    CFG.REFRESH_MS);
+    setInterval(fetchHistory, CFG.HISTORY_MS);
   }
 
-  if (perfLite) {
-    document.body.classList.add("perf-lite");
-  }
+  init();
 
-  await loadChartLibraryIfNeeded();
-
-  initLiquidGlass();
-  initCursorZoom();
-  initModernAnimations();
-  initViewSwitch();
-  initSidebar();
-
-  update();
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      update();
-    }
-  });
-
-  setInterval(update, UPDATE_INTERVAL_MS);
-}
-
-bootstrap();
+})();
