@@ -2,11 +2,10 @@
 
 # Weather Prediction Dashboard
 
-A professional, responsive weather intelligence dashboard built with Flask, featuring live metrics, short-term forecasting, and mobile-first performance optimization.
+A professional, responsive weather intelligence dashboard built with Django, featuring live metrics, short-term forecasting, and mobile-first performance optimization.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-111111?style=for-the-badge&logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.x-1a1a1a?style=for-the-badge&logo=flask&logoColor=white)
-![Waitress](https://img.shields.io/badge/Waitress-WSGI-2a2a2a?style=for-the-badge)
+![Django](https://img.shields.io/badge/Django-5.x-092E20?style=for-the-badge&logo=django&logoColor=white)
 ![Chart.js](https://img.shields.io/badge/Chart.js-Visualization-333333?style=for-the-badge&logo=chartdotjs&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Active-3f3f3f?style=for-the-badge)
 
@@ -16,7 +15,7 @@ A professional, responsive weather intelligence dashboard built with Flask, feat
 
 ## Overview
 
-Weather Prediction Dashboard is a full-stack web application for monitoring local weather conditions and presenting short-term forecasts in a modern UI.
+Weather Prediction Dashboard is a full-stack Django web application for monitoring local weather conditions and presenting short-term forecasts in a modern UI.
 
 The system combines:
 - Live environmental indicators (temperature, humidity, AQI, day/night, rain).
@@ -45,7 +44,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    U[User Browser] --> V[Flask App]
+    U[User Browser] --> V[Django View]
     V --> T[templates/index.html]
     V --> S[static/style.css]
     V --> J[static/script.js]
@@ -73,11 +72,11 @@ flowchart TD
 
 | Layer | Technologies |
 |---|---|
-| Backend | Python, Flask, Waitress |
+| Backend | Python, Django |
 | Frontend | HTML5, CSS3, JavaScript |
 | Visualization | Chart.js |
 | Data Source | Google Sheets JSON feed |
-| Deployment-ready server | Waitress (WSGI) |
+| Deployment-ready server | Django WSGI/ASGI |
 
 ---
 
@@ -86,8 +85,11 @@ flowchart TD
 ```text
 local_weather_prediction/
 |-- app.py
+|-- manage.py
 |-- requirements.txt
 |-- README.md
+|-- weather_dashboard/
+|-- weather_app/
 |-- templates/
 |   `-- index.html
 |-- static/
@@ -117,25 +119,26 @@ pip install -r requirements.txt
 ### 3. Run the app
 
 ```powershell
-python app.py
+python manage.py runserver
 ```
 
 Open in browser:
 
-- http://localhost:5000
+- http://localhost:8000
 
 ---
 
 ## Configuration
 
-Environment variables supported by app.py:
+Environment variables supported by the Django launcher:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| FLASK_HOST | 0.0.0.0 | Host binding |
-| FLASK_PORT | 5000 | Server port |
-| WAITRESS_THREADS | 8 | Waitress worker thread count |
-| FLASK_DEBUG | 1 | Debug mode fallback when Waitress is unavailable |
+| DJANGO_HOST | 0.0.0.0 | Host binding for app.py launcher |
+| DJANGO_PORT | 8000 | Port for app.py launcher |
+| DJANGO_DEBUG | 1 | Controls Django debug mode |
+| DJANGO_ALLOWED_HOSTS | * | Comma-separated allowed hosts |
+| DJANGO_SECRET_KEY | django-insecure-weather-prediction-change-me | Secret key override |
 
 ---
 

@@ -1,11 +1,12 @@
 <!DOCTYPE html>
+{% load static %}
 <html>
 <head>
   <title>Smart Weather Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{% static 'style.css' %}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
@@ -206,31 +207,31 @@
 
   <div class="team-grid">
     <article class="card team-card">
-      <img class="team-avatar" src="{{ url_for('static', filename='image/arpan-das.jpeg') }}" alt="Arpan Das" width="78" height="78" loading="lazy" decoding="async">
+      <img class="team-avatar" src="{% static 'image/arpan-das.jpeg' %}" alt="Arpan Das" width="78" height="78" loading="lazy" decoding="async">
       <h3>Arpan Das</h3>
       <p class="team-role">Developed the IoT Device</p>
     </article>
 
     <article class="card team-card">
-      <img class="team-avatar" src="{{ url_for('static', filename='image/surajit-sutradhar.jpeg') }}" alt="Surajit Sutradhar" width="78" height="78" loading="lazy" decoding="async">
+      <img class="team-avatar" src="{% static 'image/surajit-sutradhar.jpeg' %}" alt="Surajit Sutradhar" width="78" height="78" loading="lazy" decoding="async">
       <h3>Surajit Sutradhar</h3>
       <p class="team-role">Backend + AI Model</p>
     </article>
 
     <article class="card team-card">
-      <img class="team-avatar" src="{{ url_for('static', filename='image/arijit-kumar-sarkar.jpeg') }}" alt="Arijit Kumar Sarkar" width="78" height="78" loading="lazy" decoding="async">
+      <img class="team-avatar" src="{% static 'image/arijit-kumar-sarkar.jpeg' %}" alt="Arijit Kumar Sarkar" width="78" height="78" loading="lazy" decoding="async">
       <h3>Arijit Kumar Sarkar</h3>
       <p class="team-role">Frontend + Data Handling</p>
     </article>
 
     <article class="card team-card">
-      <img class="team-avatar" src="{{ url_for('static', filename='image/arindam-roy.jpeg') }}" alt="Arindam Roy" width="78" height="78" loading="lazy" decoding="async">
+      <img class="team-avatar" src="{% static 'image/arindam-roy.jpeg' %}" alt="Arindam Roy" width="78" height="78" loading="lazy" decoding="async">
       <h3>Arindam Roy</h3>
       <p class="team-role">Research + Tester</p>
     </article>
 
     <article class="card team-card">
-      <img class="team-avatar" src="{{ url_for('static', filename='image/jeet-bera.jpeg') }}" alt="Jeet Bera" width="78" height="78" loading="lazy" decoding="async">
+      <img class="team-avatar" src="{% static 'image/jeet-bera.jpeg' %}" alt="Jeet Bera" width="78" height="78" loading="lazy" decoding="async">
       <h3>Jeet Bera</h3>
       <p class="team-role">Research + Tester</p>
     </article>
@@ -272,7 +273,7 @@
   </div>
 </section>
 
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="{% static 'script.js' %}"></script>
 
 </body>
 </html>
