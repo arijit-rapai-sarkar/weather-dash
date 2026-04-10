@@ -50,6 +50,57 @@ body[data-weather="cloudy"] {
               linear-gradient(-45deg, #070f20, #121a35, #1d2245, #080f1f);
 }
 
+body.perf-lite {
+  animation: none;
+  background-size: 100% 100%;
+}
+
+body.perf-lite::before,
+body.perf-lite::after {
+  display: none;
+}
+
+body.perf-lite .top-nav,
+body.perf-lite .dashboard-section,
+body.perf-lite .card,
+body.perf-lite .side-drawer {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.perf-lite .card {
+  transform: none;
+  transition: background 0.22s ease, border-color 0.22s ease;
+  will-change: auto;
+}
+
+body.perf-lite .card:hover {
+  --lift-y: 0px;
+  transform: none;
+}
+
+body.perf-lite .top-nav::before,
+body.perf-lite .dashboard-section::before,
+body.perf-lite .card::before,
+body.perf-lite .side-drawer::before,
+body.perf-lite .top-nav::after,
+body.perf-lite .dashboard-section::after,
+body.perf-lite .card::after,
+body.perf-lite .side-drawer::after {
+  display: none;
+}
+
+body.perf-lite .hero h1,
+body.perf-lite #sunImg,
+body.perf-lite #rainImg,
+body.perf-lite .aqi-warning,
+body.perf-lite .aqi-critical,
+body.perf-lite .wind-alert,
+body.perf-lite .humid-alert,
+body.perf-lite .drop {
+  animation: none !important;
+}
+
 body::before,
 body::after {
   content: "";

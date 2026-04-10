@@ -100,7 +100,24 @@ let pendingState = null;
 let weatherMode = "";
 const canTilt = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
+function detectPerformanceMode() {
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const coarsePointer = window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  const lowCpu = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
+  const lowMemory = typeof navigator.deviceMemory === "number" && navigator.deviceMemory > 0 && navigator.deviceMemory <= 4;
+  const saveData = typeof navigator.connection === "object" && navigator.connection?.saveData === true;
+
+  return prefersReducedMotion || coarsePointer || lowCpu || lowMemory || saveData;
+}
+
+const perfLite = detectPerformanceMode();
+const UPDATE_INTERVAL_MS = perfLite ? 12000 : 5000;
+
 function initLiquidGlass() {
+  if (perfLite || !canTilt) {
+    return;
+  }
+
   const glassElements = document.querySelectorAll(".top-nav, .dashboard-section, .card, .side-drawer");
 
   glassElements.forEach((element) => {
@@ -368,6 +385,10 @@ function initViewSwitch() {
 }
 
 function initModernAnimations() {
+  if (perfLite) {
+    return;
+  }
+
   const cards = document.querySelectorAll(".card");
   if (!cards.length) {
     return;
@@ -734,7 +755,7 @@ function setRainState(isRaining) {
 
   rainActive = isRaining;
   if (isRaining) {
-    setRainDrops(60);
+    setRainDrops(perfLite ? 18 : 60);
     dom.rainEffect.style.opacity = "1";
   } else {
     dom.rainEffect.style.opacity = "0";
@@ -894,6 +915,10 @@ function scheduleRender(state) {
 }
 
 async function update() {
+  if (document.visibilityState === "hidden") {
+    return;
+  }
+
   if (isFetching) {
     return;
   }
@@ -928,9 +953,17 @@ async function update() {
 }
 
 update();
+if (perfLite) {
+  document.body.classList.add("perf-lite");
+}
 initLiquidGlass();
 initCursorZoom();
 initModernAnimations();
 initViewSwitch();
 initSidebar();
-setInterval(update, 5000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    update();
+  }
+});
+setInterval(update, UPDATE_INTERVAL_MS);
