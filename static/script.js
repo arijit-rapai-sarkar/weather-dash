@@ -582,12 +582,12 @@ function applyAqiColorScale(aqi) {
   }
 
   const safeAqi = clamp(aqi, 0, 300);
-  const shade = Math.round(220 - (safeAqi / 300) * 95);
-  const ringColor = `rgb(${shade}, ${shade}, ${shade})`;
-  const glowColor = `rgba(${shade}, ${shade}, ${shade}, 0.42)`;
+  const hue = 120 - (safeAqi / 300) * 120;
+  const ringColor = `hsl(${hue.toFixed(0)} 88% 52%)`;
+  const glowColor = `hsla(${hue.toFixed(0)}, 92%, 58%, 0.46)`;
 
   dom.aqi.style.border = `3px solid ${ringColor}`;
-  dom.aqi.style.background = `radial-gradient(circle at 34% 28%, rgba(${shade}, ${shade}, ${shade}, 0.28), rgba(0, 0, 0, 0.45) 66%)`;
+  dom.aqi.style.background = `radial-gradient(circle at 34% 28%, hsla(${hue.toFixed(0)}, 95%, 62%, 0.34), rgba(0, 0, 0, 0.45) 66%)`;
   dom.aqi.style.boxShadow = `inset 0 0 20px rgba(0,0,0,0.5), 0 0 16px ${glowColor}, 0 6px 16px rgba(0,0,0,0.32)`;
 }
 
@@ -624,7 +624,7 @@ function getHumidityProfile(humidity) {
   }
 
   if (humidity <= 65) {
-    return { emoji: "💧", label: "Comfort", className: "humidity-comfort" };
+    return { emoji: "🌿", label: "Comfort", className: "humidity-comfort" };
   }
 
   return { emoji: "🌫", label: "Humid", className: "humidity-humid" };
@@ -632,18 +632,18 @@ function getHumidityProfile(humidity) {
 
 function getAqiProfile(aqi) {
   if (aqi <= 50) {
-    return { label: "Good", accent: "#e5e7eb", fill: "linear-gradient(90deg, #d4d4d8, #e5e7eb)" };
+    return { label: "Good", accent: "#22c55e", fill: "linear-gradient(90deg, #22c55e, #4ade80)" };
   }
 
   if (aqi <= 100) {
-    return { label: "Moderate", accent: "#d4d4d8", fill: "linear-gradient(90deg, #b4b4b8, #d4d4d8)" };
+    return { label: "Moderate", accent: "#f59e0b", fill: "linear-gradient(90deg, #f59e0b, #fbbf24)" };
   }
 
   if (aqi <= 200) {
-    return { label: "Unhealthy", accent: "#a1a1aa", fill: "linear-gradient(90deg, #8e8e95, #a1a1aa)" };
+    return { label: "Unhealthy", accent: "#ef4444", fill: "linear-gradient(90deg, #ef4444, #fb7185)" };
   }
 
-  return { label: "Very Unhealthy", accent: "#71717a", fill: "linear-gradient(90deg, #5e5e66, #71717a)" };
+  return { label: "Very Unhealthy", accent: "#a855f7", fill: "linear-gradient(90deg, #a855f7, #c084fc)" };
 }
 
 function setSnapshotRow(fillEl, valueEl, stateEl, options) {
@@ -677,16 +677,16 @@ function updateSnapshotMetrics(temp, hum, aqi) {
     percent: Math.round((safeTemp / 50) * 100),
     valueText: `${Math.round(safeTemp)}°C`,
     stateText: tempProfile.label,
-    fill: safeTemp >= 34 ? "linear-gradient(90deg, #9f9fa6, #7f7f86)" : safeTemp >= 22 ? "linear-gradient(90deg, #c9c9ce, #a6a6ad)" : "linear-gradient(90deg, #ececf0, #cfd0d4)",
-    accent: safeTemp >= 34 ? "#9f9fa6" : safeTemp >= 22 ? "#c9c9ce" : "#ececf0"
+    fill: safeTemp >= 34 ? "linear-gradient(90deg, #fb7185, #ef4444)" : safeTemp >= 22 ? "linear-gradient(90deg, #facc15, #f59e0b)" : "linear-gradient(90deg, #38bdf8, #0ea5e9)",
+    accent: safeTemp >= 34 ? "#fb7185" : safeTemp >= 22 ? "#f59e0b" : "#38bdf8"
   });
 
   setSnapshotRow(dom.humVizFill, dom.humVizValue, dom.humVizState, {
     percent: Math.round(safeHum),
     valueText: `${Math.round(safeHum)}%`,
     stateText: humProfile.label,
-    fill: safeHum < 35 ? "linear-gradient(90deg, #b8b8bf, #9a9aa2)" : safeHum <= 65 ? "linear-gradient(90deg, #d8d8de, #bcbcc3)" : "linear-gradient(90deg, #9f9fa6, #7f7f86)",
-    accent: safeHum < 35 ? "#b8b8bf" : safeHum <= 65 ? "#d8d8de" : "#9f9fa6"
+    fill: safeHum < 35 ? "linear-gradient(90deg, #fb923c, #f97316)" : safeHum <= 65 ? "linear-gradient(90deg, #2dd4bf, #14b8a6)" : "linear-gradient(90deg, #38bdf8, #2563eb)",
+    accent: safeHum < 35 ? "#fb923c" : safeHum <= 65 ? "#2dd4bf" : "#38bdf8"
   });
 
   setSnapshotRow(dom.aqiVizFill, dom.aqiVizValue, dom.aqiVizState, {
@@ -721,13 +721,13 @@ function updateHumidityBars(container, humidity) {
 
 function applyHumidityProfile(humidity, options = {}) {
   const safeHumidity = clamp(humidity, 0, 100);
-  const shade = Math.round(228 - (safeHumidity / 100) * 85);
-  const startShade = Math.max(112, shade - 28);
+  const hue = 35 + (safeHumidity / 100) * 165;
+  const startHue = Math.max(24, hue - 28);
   const profile = getHumidityProfile(safeHumidity);
 
   if (options.fillEl) {
     options.fillEl.style.width = `${safeHumidity}%`;
-    options.fillEl.style.background = `linear-gradient(90deg, rgb(${startShade}, ${startShade}, ${startShade}), rgb(${shade}, ${shade}, ${shade}))`;
+    options.fillEl.style.background = `linear-gradient(90deg, hsl(${startHue.toFixed(0)} 90% 58%), hsl(${hue.toFixed(0)} 88% 56%))`;
   }
 
   updateHumidityBars(options.barsEl, safeHumidity);
@@ -738,10 +738,6 @@ function applyHumidityProfile(humidity, options = {}) {
 
   if (options.emojiEl && updateTextDiff(options.emojiEl, profile.emoji)) {
     triggerAnimationClass(options.emojiEl, "icon-pop");
-  }
-
-  if (options.valueIconEl && updateTextDiff(options.valueIconEl, "💧")) {
-    triggerAnimationClass(options.valueIconEl, "icon-pop");
   }
 
   if (!options.cardEl) {
@@ -835,12 +831,12 @@ function ensureCharts(temp, hum, f) {
   }
 
   if (!charts.tChart) {
-    charts.tChart = gauge(dom.tChart, clamp(temp, 0, 50), 50, "#d4d4d8");
-    charts.hChart = gauge(dom.hChart, clamp(hum, 0, 100), 100, "#b4b4b8");
-    charts.rainChart = gauge(dom.rainChance, clamp(f.rainChance, 0, 100), 100, "#c9c9ce");
-    charts.tempChart2 = gauge(dom.tempPred, clamp(f.tempPred, 0, 50), 50, "#a1a1aa");
-    charts.humChart2 = gauge(dom.humPred, clamp(f.humPred, 0, 100), 100, "#d4d4d8");
-    charts.windChart = gauge(dom.windPred, clamp(f.wind, 0, 50), 50, "#8e8e95");
+    charts.tChart = gauge(dom.tChart, clamp(temp, 0, 50), 50, "#ff6b6b");
+    charts.hChart = gauge(dom.hChart, clamp(hum, 0, 100), 100, "#22d3ee");
+    charts.rainChart = gauge(dom.rainChance, clamp(f.rainChance, 0, 100), 100, "#4ecdc4");
+    charts.tempChart2 = gauge(dom.tempPred, clamp(f.tempPred, 0, 50), 50, "#ff6b6b");
+    charts.humChart2 = gauge(dom.humPred, clamp(f.humPred, 0, 100), 100, "#22d3ee");
+    charts.windChart = gauge(dom.windPred, clamp(f.wind, 0, 50), 50, "#a29bfe");
     return;
   }
 
