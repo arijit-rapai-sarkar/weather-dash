@@ -143,7 +143,7 @@ function detectPerformanceMode() {
 
 const perfLite = detectPerformanceMode();
 const mobileLite = isMobileDevice || perfLite;
-const UPDATE_INTERVAL_MS = mobileLite ? 10000 : 5000;
+const UPDATE_INTERVAL_MS = mobileLite ? 15000 : 5000;
 
 async function loadChartLibraryIfNeeded() {
   if (mobileLite) {

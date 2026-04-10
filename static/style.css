@@ -57,6 +57,7 @@ body[data-weather="cloudy"] {
 
 body.mobile-lite {
   animation: none;
+  background: linear-gradient(180deg, #050508 0%, #09090d 55%, #0b0d12 100%);
   background-size: 100% 100%;
 }
 
@@ -73,12 +74,13 @@ body.mobile-lite .sidebar-toggle,
 body.mobile-lite .side-drawer {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  background-clip: padding-box;
 }
 
 body.mobile-lite .dashboard-section,
 body.mobile-lite .card {
   transform: none;
-  transition: background 0.22s ease, border-color 0.22s ease;
+  transition: none;
   will-change: auto;
 }
 
@@ -93,6 +95,33 @@ body.mobile-lite .side-drawer {
 body.mobile-lite .card:hover {
   --lift-y: 0px;
   transform: none;
+}
+
+body.mobile-lite .hero,
+body.mobile-lite .view-switch,
+body.mobile-lite .dashboard-section,
+body.mobile-lite .card,
+body.mobile-lite .side-drawer,
+body.mobile-lite .sidebar-toggle {
+  box-shadow: none;
+}
+
+body.mobile-lite .hero,
+body.mobile-lite .view-switch,
+body.mobile-lite .dashboard-section,
+body.mobile-lite .card,
+body.mobile-lite .side-drawer {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.mobile-lite .hero h1,
+body.mobile-lite .hero h1::before,
+body.mobile-lite .hero h1::after,
+body.mobile-lite .section-head h2::before,
+body.mobile-lite .side-link::before,
+body.mobile-lite .switch-btn::before,
+body.mobile-lite .feedback-form button::before {
+  display: none;
 }
 
 body.mobile-lite .top-nav::before,
@@ -113,7 +142,9 @@ body.mobile-lite .aqi-warning,
 body.mobile-lite .aqi-critical,
 body.mobile-lite .wind-alert,
 body.mobile-lite .humid-alert,
-body.mobile-lite .drop {
+body.mobile-lite .drop,
+body.mobile-lite .icon-pop,
+body.mobile-lite .value-bounce {
   animation: none !important;
 }
 
@@ -124,7 +155,7 @@ body.mobile-lite .rain-container {
 body.mobile-lite .dashboard-section,
 body.mobile-lite .card {
   content-visibility: auto;
-  contain-intrinsic-size: 320px 260px;
+  contain-intrinsic-size: 260px 220px;
 }
 
 body.perf-lite {
@@ -1611,6 +1642,32 @@ body[data-weather="rainy"] .hero::after {
     transform: none;
   }
 
+  .dashboard-section,
+  .card,
+  .view-switch,
+  .sidebar-toggle,
+  .side-drawer,
+  .hero {
+    box-shadow: none;
+  }
+
+  .top-nav::before,
+  .dashboard-section::before,
+  .card::before,
+  .side-drawer::before,
+  .top-nav::after,
+  .dashboard-section::after,
+  .card::after,
+  .side-drawer::after,
+  .hero h1::before,
+  .hero h1::after,
+  .section-head h2::before,
+  .side-link::before,
+  .switch-btn::before,
+  .feedback-form button::before {
+    display: none;
+  }
+
   .card {
     --tilt-x: 0deg !important;
     --tilt-y: 0deg !important;
@@ -1628,6 +1685,21 @@ body[data-weather="rainy"] .hero::after {
   .humid-alert {
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
+  }
+
+  .hero h1,
+  .hero p,
+  .section-head h2,
+  .section-subtitle,
+  .value,
+  .metric-badge,
+  .snapshot-time,
+  .snapshot-state,
+  .team-role,
+  .info-card p,
+  .contact-link,
+  .feedback-form label {
+    text-shadow: none;
   }
 }
 
