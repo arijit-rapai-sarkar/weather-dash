@@ -145,6 +145,33 @@ const perfLite = detectPerformanceMode();
 const mobileLite = isMobileDevice || perfLite;
 const UPDATE_INTERVAL_MS = mobileLite ? 10000 : 5000;
 
+async function loadChartLibraryIfNeeded() {
+  if (mobileLite) {
+    return false;
+  }
+
+  if (typeof Chart !== "undefined") {
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    const existing = document.querySelector('script[data-chartjs-loader="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(true), { once: true });
+      existing.addEventListener("error", () => resolve(false), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js";
+    script.async = true;
+    script.dataset.chartjsLoader = "true";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
 function initLiquidGlass() {
   if (mobileLite || !canTilt) {
     return;
@@ -826,7 +853,7 @@ function updateGauge(chart, value, max) {
 }
 
 function ensureCharts(temp, hum, f) {
-  if (typeof Chart === "undefined") {
+  if (mobileLite || typeof Chart === "undefined") {
     return;
   }
 
@@ -994,21 +1021,32 @@ async function update() {
   }
 }
 
-update();
-if (mobileLite) {
-  document.body.classList.add("mobile-lite");
-}
-if (perfLite) {
-  document.body.classList.add("perf-lite");
-}
-initLiquidGlass();
-initCursorZoom();
-initModernAnimations();
-initViewSwitch();
-initSidebar();
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    update();
+async function bootstrap() {
+  if (mobileLite) {
+    document.body.classList.add("mobile-lite");
   }
-});
-setInterval(update, UPDATE_INTERVAL_MS);
+
+  if (perfLite) {
+    document.body.classList.add("perf-lite");
+  }
+
+  await loadChartLibraryIfNeeded();
+
+  initLiquidGlass();
+  initCursorZoom();
+  initModernAnimations();
+  initViewSwitch();
+  initSidebar();
+
+  update();
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      update();
+    }
+  });
+
+  setInterval(update, UPDATE_INTERVAL_MS);
+}
+
+bootstrap();

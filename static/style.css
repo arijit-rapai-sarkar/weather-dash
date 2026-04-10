@@ -68,15 +68,26 @@ body.mobile-lite::after {
 body.mobile-lite .top-nav,
 body.mobile-lite .dashboard-section,
 body.mobile-lite .card,
+body.mobile-lite .view-switch,
+body.mobile-lite .sidebar-toggle,
 body.mobile-lite .side-drawer {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 
+body.mobile-lite .dashboard-section,
 body.mobile-lite .card {
   transform: none;
   transition: background 0.22s ease, border-color 0.22s ease;
   will-change: auto;
+}
+
+body.mobile-lite .dashboard-section,
+body.mobile-lite .card,
+body.mobile-lite .view-switch,
+body.mobile-lite .sidebar-toggle,
+body.mobile-lite .side-drawer {
+  box-shadow: none;
 }
 
 body.mobile-lite .card:hover {
@@ -108,6 +119,12 @@ body.mobile-lite .drop {
 
 body.mobile-lite .rain-container {
   display: none;
+}
+
+body.mobile-lite .dashboard-section,
+body.mobile-lite .card {
+  content-visibility: auto;
+  contain-intrinsic-size: 320px 260px;
 }
 
 body.perf-lite {
@@ -1570,6 +1587,30 @@ body[data-weather="rainy"] .hero::after {
 }
 
 @media (hover: none), (pointer: coarse) {
+  body::before,
+  body::after,
+  .rain-container {
+    display: none;
+  }
+
+  .view-switch,
+  .sidebar-toggle,
+  .dashboard-section,
+  .card,
+  .side-drawer {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .dashboard-section,
+  .card,
+  .view-switch,
+  .sidebar-toggle,
+  .side-drawer {
+    transform: none;
+  }
+
   .card {
     --tilt-x: 0deg !important;
     --tilt-y: 0deg !important;
