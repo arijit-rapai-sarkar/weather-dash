@@ -38,6 +38,37 @@ const NIGHT_SKY_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
   </svg>`
 )}`;
 
+const RAIN_WEATHER_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Rain icon">
+    <g>
+      <ellipse cx="60" cy="46" rx="30" ry="17" fill="#e2e8f0"/>
+      <ellipse cx="80" cy="49" rx="20" ry="13" fill="#f8fafc"/>
+      <ellipse cx="42" cy="51" rx="18" ry="12" fill="#cbd5e1"/>
+    </g>
+    <g fill="#38bdf8">
+      <path d="M42 70c4 6 4 12 0 16-4-4-4-10 0-16z"/>
+      <path d="M60 72c4 6 4 12 0 16-4-4-4-10 0-16z"/>
+      <path d="M78 70c4 6 4 12 0 16-4-4-4-10 0-16z"/>
+    </g>
+  </svg>`
+)}`;
+
+const CLEAR_WEATHER_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Clear weather icon">
+    <circle cx="60" cy="60" r="21" fill="#facc15"/>
+    <g stroke="#f59e0b" stroke-width="5" stroke-linecap="round">
+      <line x1="60" y1="14" x2="60" y2="0"/>
+      <line x1="60" y1="120" x2="60" y2="106"/>
+      <line x1="14" y1="60" x2="0" y2="60"/>
+      <line x1="120" y1="60" x2="106" y2="60"/>
+      <line x1="26" y1="26" x2="16" y2="16"/>
+      <line x1="104" y1="104" x2="94" y2="94"/>
+      <line x1="26" y1="94" x2="16" y2="104"/>
+      <line x1="104" y1="16" x2="94" y2="26"/>
+    </g>
+  </svg>`
+)}`;
+
 const dom = {
   temp: document.getElementById("temp"),
   tempMood: document.getElementById("tempMood"),
@@ -99,22 +130,23 @@ let uiFrameQueued = false;
 let pendingState = null;
 let weatherMode = "";
 const canTilt = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+const isMobileDevice = window.matchMedia("(hover: none), (pointer: coarse)").matches;
 
 function detectPerformanceMode() {
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const coarsePointer = window.matchMedia("(hover: none), (pointer: coarse)").matches;
-  const lowCpu = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
-  const lowMemory = typeof navigator.deviceMemory === "number" && navigator.deviceMemory > 0 && navigator.deviceMemory <= 4;
+  const lowCpu = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 2;
+  const lowMemory = typeof navigator.deviceMemory === "number" && navigator.deviceMemory > 0 && navigator.deviceMemory <= 2;
   const saveData = typeof navigator.connection === "object" && navigator.connection?.saveData === true;
 
-  return prefersReducedMotion || coarsePointer || lowCpu || lowMemory || saveData;
+  return prefersReducedMotion || lowCpu || lowMemory || saveData;
 }
 
 const perfLite = detectPerformanceMode();
-const UPDATE_INTERVAL_MS = perfLite ? 12000 : 5000;
+const mobileLite = isMobileDevice || perfLite;
+const UPDATE_INTERVAL_MS = mobileLite ? 10000 : 5000;
 
 function initLiquidGlass() {
-  if (perfLite || !canTilt) {
+  if (mobileLite || !canTilt) {
     return;
   }
 
@@ -385,7 +417,7 @@ function initViewSwitch() {
 }
 
 function initModernAnimations() {
-  if (perfLite) {
+  if (mobileLite) {
     return;
   }
 
@@ -427,6 +459,10 @@ async function getData() {
 }
 
 function gauge(ctx, val, max, color) {
+  if (typeof Chart === "undefined" || !ctx) {
+    return null;
+  }
+
   return new Chart(ctx, {
     type: "doughnut",
     data: {
@@ -546,12 +582,12 @@ function applyAqiColorScale(aqi) {
   }
 
   const safeAqi = clamp(aqi, 0, 300);
-  const hue = 120 - (safeAqi / 300) * 120;
-  const ringColor = `hsl(${hue.toFixed(0)} 88% 52%)`;
-  const glowColor = `hsla(${hue.toFixed(0)}, 92%, 58%, 0.46)`;
+  const shade = Math.round(220 - (safeAqi / 300) * 95);
+  const ringColor = `rgb(${shade}, ${shade}, ${shade})`;
+  const glowColor = `rgba(${shade}, ${shade}, ${shade}, 0.42)`;
 
   dom.aqi.style.border = `3px solid ${ringColor}`;
-  dom.aqi.style.background = `radial-gradient(circle at 34% 28%, hsla(${hue.toFixed(0)}, 95%, 62%, 0.34), rgba(0, 0, 0, 0.45) 66%)`;
+  dom.aqi.style.background = `radial-gradient(circle at 34% 28%, rgba(${shade}, ${shade}, ${shade}, 0.28), rgba(0, 0, 0, 0.45) 66%)`;
   dom.aqi.style.boxShadow = `inset 0 0 20px rgba(0,0,0,0.5), 0 0 16px ${glowColor}, 0 6px 16px rgba(0,0,0,0.32)`;
 }
 
@@ -596,18 +632,18 @@ function getHumidityProfile(humidity) {
 
 function getAqiProfile(aqi) {
   if (aqi <= 50) {
-    return { label: "Good", accent: "#22c55e", fill: "linear-gradient(90deg, #22c55e, #4ade80)" };
+    return { label: "Good", accent: "#e5e7eb", fill: "linear-gradient(90deg, #d4d4d8, #e5e7eb)" };
   }
 
   if (aqi <= 100) {
-    return { label: "Moderate", accent: "#f59e0b", fill: "linear-gradient(90deg, #f59e0b, #fbbf24)" };
+    return { label: "Moderate", accent: "#d4d4d8", fill: "linear-gradient(90deg, #b4b4b8, #d4d4d8)" };
   }
 
   if (aqi <= 200) {
-    return { label: "Unhealthy", accent: "#ef4444", fill: "linear-gradient(90deg, #ef4444, #fb7185)" };
+    return { label: "Unhealthy", accent: "#a1a1aa", fill: "linear-gradient(90deg, #8e8e95, #a1a1aa)" };
   }
 
-  return { label: "Very Unhealthy", accent: "#a855f7", fill: "linear-gradient(90deg, #a855f7, #c084fc)" };
+  return { label: "Very Unhealthy", accent: "#71717a", fill: "linear-gradient(90deg, #5e5e66, #71717a)" };
 }
 
 function setSnapshotRow(fillEl, valueEl, stateEl, options) {
@@ -641,16 +677,16 @@ function updateSnapshotMetrics(temp, hum, aqi) {
     percent: Math.round((safeTemp / 50) * 100),
     valueText: `${Math.round(safeTemp)}°C`,
     stateText: tempProfile.label,
-    fill: safeTemp >= 34 ? "linear-gradient(90deg, #fb7185, #ef4444)" : safeTemp >= 22 ? "linear-gradient(90deg, #facc15, #f59e0b)" : "linear-gradient(90deg, #38bdf8, #0ea5e9)",
-    accent: safeTemp >= 34 ? "#fb7185" : safeTemp >= 22 ? "#f59e0b" : "#38bdf8"
+    fill: safeTemp >= 34 ? "linear-gradient(90deg, #9f9fa6, #7f7f86)" : safeTemp >= 22 ? "linear-gradient(90deg, #c9c9ce, #a6a6ad)" : "linear-gradient(90deg, #ececf0, #cfd0d4)",
+    accent: safeTemp >= 34 ? "#9f9fa6" : safeTemp >= 22 ? "#c9c9ce" : "#ececf0"
   });
 
   setSnapshotRow(dom.humVizFill, dom.humVizValue, dom.humVizState, {
     percent: Math.round(safeHum),
     valueText: `${Math.round(safeHum)}%`,
     stateText: humProfile.label,
-    fill: safeHum < 35 ? "linear-gradient(90deg, #fb923c, #f97316)" : safeHum <= 65 ? "linear-gradient(90deg, #2dd4bf, #14b8a6)" : "linear-gradient(90deg, #38bdf8, #2563eb)",
-    accent: safeHum < 35 ? "#fb923c" : safeHum <= 65 ? "#2dd4bf" : "#38bdf8"
+    fill: safeHum < 35 ? "linear-gradient(90deg, #b8b8bf, #9a9aa2)" : safeHum <= 65 ? "linear-gradient(90deg, #d8d8de, #bcbcc3)" : "linear-gradient(90deg, #9f9fa6, #7f7f86)",
+    accent: safeHum < 35 ? "#b8b8bf" : safeHum <= 65 ? "#d8d8de" : "#9f9fa6"
   });
 
   setSnapshotRow(dom.aqiVizFill, dom.aqiVizValue, dom.aqiVizState, {
@@ -685,13 +721,13 @@ function updateHumidityBars(container, humidity) {
 
 function applyHumidityProfile(humidity, options = {}) {
   const safeHumidity = clamp(humidity, 0, 100);
-  const hue = 35 + (safeHumidity / 100) * 165;
-  const startHue = Math.max(24, hue - 28);
+  const shade = Math.round(228 - (safeHumidity / 100) * 85);
+  const startShade = Math.max(112, shade - 28);
   const profile = getHumidityProfile(safeHumidity);
 
   if (options.fillEl) {
     options.fillEl.style.width = `${safeHumidity}%`;
-    options.fillEl.style.background = `linear-gradient(90deg, hsl(${startHue.toFixed(0)} 90% 58%), hsl(${hue.toFixed(0)} 88% 56%))`;
+    options.fillEl.style.background = `linear-gradient(90deg, rgb(${startShade}, ${startShade}, ${startShade}), rgb(${shade}, ${shade}, ${shade}))`;
   }
 
   updateHumidityBars(options.barsEl, safeHumidity);
@@ -755,6 +791,12 @@ function setRainState(isRaining) {
 
   rainActive = isRaining;
   if (isRaining) {
+    if (mobileLite) {
+      setRainDrops(0);
+      dom.rainEffect.style.opacity = "0";
+      return;
+    }
+
     setRainDrops(perfLite ? 18 : 60);
     dom.rainEffect.style.opacity = "1";
   } else {
@@ -788,13 +830,17 @@ function updateGauge(chart, value, max) {
 }
 
 function ensureCharts(temp, hum, f) {
+  if (typeof Chart === "undefined") {
+    return;
+  }
+
   if (!charts.tChart) {
-    charts.tChart = gauge(dom.tChart, clamp(temp, 0, 50), 50, "#ff6b6b");
-    charts.hChart = gauge(dom.hChart, clamp(hum, 0, 100), 100, "#22d3ee");
-    charts.rainChart = gauge(dom.rainChance, clamp(f.rainChance, 0, 100), 100, "#4ecdc4");
-    charts.tempChart2 = gauge(dom.tempPred, clamp(f.tempPred, 0, 50), 50, "#ff6b6b");
-    charts.humChart2 = gauge(dom.humPred, clamp(f.humPred, 0, 100), 100, "#22d3ee");
-    charts.windChart = gauge(dom.windPred, clamp(f.wind, 0, 50), 50, "#a29bfe");
+    charts.tChart = gauge(dom.tChart, clamp(temp, 0, 50), 50, "#d4d4d8");
+    charts.hChart = gauge(dom.hChart, clamp(hum, 0, 100), 100, "#b4b4b8");
+    charts.rainChart = gauge(dom.rainChance, clamp(f.rainChance, 0, 100), 100, "#c9c9ce");
+    charts.tempChart2 = gauge(dom.tempPred, clamp(f.tempPred, 0, 50), 50, "#a1a1aa");
+    charts.humChart2 = gauge(dom.humPred, clamp(f.humPred, 0, 100), 100, "#d4d4d8");
+    charts.windChart = gauge(dom.windPred, clamp(f.wind, 0, 50), 50, "#8e8e95");
     return;
   }
 
@@ -852,7 +898,7 @@ function renderState(state) {
   }
 
   if (state.rain === "Raining") {
-    if (updateSrcDiff(dom.rainImg, "https://cdn-icons-png.flaticon.com/512/3351/3351979.png")) {
+    if (updateSrcDiff(dom.rainImg, RAIN_WEATHER_ICON)) {
       triggerAnimationClass(dom.rainImg, "icon-pop");
     }
     if (updateTextDiff(dom.rainText, "Raining")) {
@@ -860,7 +906,7 @@ function renderState(state) {
     }
     setRainState(true);
   } else {
-    if (updateSrcDiff(dom.rainImg, "https://cdn-icons-png.flaticon.com/512/869/869869.png")) {
+    if (updateSrcDiff(dom.rainImg, CLEAR_WEATHER_ICON)) {
       triggerAnimationClass(dom.rainImg, "icon-pop");
     }
     if (updateTextDiff(dom.rainText, "Clear")) {
@@ -953,6 +999,9 @@ async function update() {
 }
 
 update();
+if (mobileLite) {
+  document.body.classList.add("mobile-lite");
+}
 if (perfLite) {
   document.body.classList.add("perf-lite");
 }
