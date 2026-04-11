@@ -1,32 +1,34 @@
 from pathlib import Path
 import os
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# -------------------------------------------------------------------
+# Core settings
+# -------------------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-weather-prediction-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
-# Build ALLOWED_HOSTS from env var + auto-detect Railway domain
-_allowed = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
-_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")          # e.g. myapp.up.railway.app
-_railway_static = os.getenv("RAILWAY_STATIC_URL", "")             # alternate static domain
-if _railway_domain and _railway_domain not in _allowed:
-    _allowed.append(_railway_domain)
-if DEBUG:
-    if not _allowed:                                               # fallback for local dev
-        _allowed = ["localhost", "127.0.0.1", "[::1]"]
-else:
-    _allowed = [host for host in _allowed if host != "*"]
+# -------------------------------------------------------------------
+# ALLOWED HOSTS (FIXED FOR RENDER)
+# -------------------------------------------------------------------
+ALLOWED_HOSTS = os.getenv(
+    "DJANGO_ALLOWED_HOSTS",
+    "weather-dash-3i6o.onrender.com,localhost,127.0.0.1"
+).split(",")
 
-ALLOWED_HOSTS = _allowed
-
-# CSRF must trust Railway's HTTPS origin
+# -------------------------------------------------------------------
+# CSRF Trusted Origins
+# -------------------------------------------------------------------
 CSRF_TRUSTED_ORIGINS = [
-    f"https://{host}" for host in ALLOWED_HOSTS
-    if host not in {"localhost", "127.0.0.1", "[::1]", "*"} and "." in host
+    f"https://{host.strip()}"
+    for host in ALLOWED_HOSTS
+    if host not in ["localhost", "127.0.0.1", "*"]
 ]
 
+# -------------------------------------------------------------------
+# Installed Apps
+# -------------------------------------------------------------------
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -37,6 +39,9 @@ INSTALLED_APPS = [
     "weather_app",
 ]
 
+# -------------------------------------------------------------------
+# Middleware
+# -------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -48,6 +53,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# -------------------------------------------------------------------
+# URLs & Templates
+# -------------------------------------------------------------------
 ROOT_URLCONF = "weather_dashboard.urls"
 
 TEMPLATES = [
@@ -68,6 +76,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "weather_dashboard.wsgi.application"
 
+# -------------------------------------------------------------------
+# Database
+# -------------------------------------------------------------------
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -77,27 +88,35 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = []
 
+# -------------------------------------------------------------------
+# Internationalization
+# -------------------------------------------------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
+# -------------------------------------------------------------------
+# Static Files (IMPORTANT FOR RENDER)
+# -------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
 STORAGES = {
     "staticfiles": {
-        # CompressedStaticFilesStorage (not Manifest) — avoids startup crash
-        # when staticfiles/ directory doesn't exist yet on first deploy.
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
+# -------------------------------------------------------------------
+# Default Primary Key
+# -------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ---------------------------------------------------------------------------
-# Logging — surface errors clearly instead of silent crashes
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Logging
+# -------------------------------------------------------------------
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -131,9 +150,9 @@ LOGGING = {
     },
 }
 
-# ---------------------------------------------------------------------------
-# Security hardening for production
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Security (Production)
+# -------------------------------------------------------------------
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = "DENY"
