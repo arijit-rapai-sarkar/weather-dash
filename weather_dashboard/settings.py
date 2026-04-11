@@ -13,16 +13,18 @@ _railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")          # e.g. myapp.u
 _railway_static = os.getenv("RAILWAY_STATIC_URL", "")             # alternate static domain
 if _railway_domain and _railway_domain not in _allowed:
     _allowed.append(_railway_domain)
-if not _allowed:                                                   # fallback for local dev
-    _allowed = ["*"]
-elif not DEBUG and "*" not in _allowed:
-    _allowed.append("*")
+if DEBUG:
+    if not _allowed:                                               # fallback for local dev
+        _allowed = ["localhost", "127.0.0.1", "[::1]"]
+else:
+    _allowed = [host for host in _allowed if host != "*"]
+
 ALLOWED_HOSTS = _allowed
 
 # CSRF must trust Railway's HTTPS origin
 CSRF_TRUSTED_ORIGINS = [
-    f"https://{_railway_domain}" for _railway_domain in _allowed
-    if not _railway_domain.startswith("*")
+    f"https://{host}" for host in ALLOWED_HOSTS
+    if host not in {"localhost", "127.0.0.1", "[::1]", "*"} and "." in host
 ]
 
 INSTALLED_APPS = [
